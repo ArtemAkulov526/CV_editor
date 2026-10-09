@@ -19,9 +19,9 @@
           "subtitle": "Python Developer",
           "subtitleRight": "March 2025 - present",
           "bullets": [
-            "Build REST APIs with FastAPI and PostgreSQL for an internal order management system.",
-            "Write unit and integration tests with pytest and run them in GitHub Actions.",
-            "Package services with Docker and docker-compose for consistent local development."
+            "Built REST APIs with FastAPI and PostgreSQL for an internal order management system.",
+            "Wrote unit and integration tests with pytest and ran them in GitHub Actions.",
+            "Packaged services with Docker and docker-compose for consistent local development."
           ]
         },
         {

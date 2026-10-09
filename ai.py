@@ -30,8 +30,9 @@ EFFORT = {"write": "low", "review": "medium", "proofread": "medium"}
 STYLE_RULES = """- Use only facts the user gave you (in the notes or the CV). Never invent employers, tools, \
 numbers, percentages, team sizes or results. If a metric would help but none was given, leave it out.
 - Bullet points start with a strong action verb, have no "I", and fit in one or two lines \
-(roughly 90-200 characters). Use past tense, or present tense for a current role.
-- Match the tone, tense and punctuation of the CV's existing bullet points (for example whether \
+(roughly 90-200 characters). Always use past tense, including for a current role \
+(for example "Maintained", not "Maintain" or "Maintaining").
+- Match the tone and punctuation of the CV's existing bullet points (for example whether \
 they end with a period).
 - Prefer concrete technologies and outcomes over generic claims such as "hard-working" or \
 "team player".
@@ -53,7 +54,7 @@ Look at:
 (for example a job with no bullet points, especially the current one).
 - Relevance: fit for the target position or job posting if one is given, and keywords that \
 applicant tracking systems would look for.
-- Consistency: date formats, punctuation, tense (present for the current role, past otherwise), \
+- Consistency: date formats, punctuation, tense (past tense throughout, including the current role), \
 capitalisation, naming of technologies.
 - Language: grammar, spelling, unnatural phrasing (the author is not a native English speaker).
 - Structure: section order, what to emphasise or cut, and use of space on the page.
