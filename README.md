@@ -16,7 +16,7 @@ A local editor for a one-page CV in the classic LaTeX résumé style. You edit y
 - **AI helper (✨)**, optional:
   - Turns rough notes, in any language, into CV bullet points.
   - Suggests better wording for a bullet point and suggests headlines.
-  - **Review CV** gives recruiter-style feedback: a score, strengths, and issues ranked by importance. Most fixes can be applied with one click. You can paste a job posting to tailor the review.
+  - **Review CV** gives recruiter-style feedback: a score, strengths, and issues ranked by importance. Most fixes can be applied with one click, including merging two bullet points or cutting one. You can paste a job posting to tailor the review.
 
 ## Quick start
 
@@ -39,7 +39,7 @@ On first run, the editor creates `data/cv.json` from `data/cv.example.json`. Rep
 - **Save** (Ctrl+S) writes `data/cv.json`. The previous version goes to `backups/`, and the 50 most recent versions are kept. **History** restores one.
 - **Export PDF** (Ctrl+E) saves, then writes `output/<PDF file name>.pdf`.
 - **Formatting inside any text:** `**bold**`, `*italic*`, `[link text](https://…)`. Email addresses in the contact line become clickable automatically.
-- **In bullet points:** Enter starts a new bullet, Backspace on an empty bullet deletes it, and Shift+Enter adds a line break.
+- **In bullet points:** Enter starts a new bullet, Backspace on an empty bullet deletes it, and Shift+Enter adds a line break. ⤵ merges a bullet with the next one.
 - `data/cv.json` is plain JSON and is fine to edit by hand too.
 
 ## AI helper

@@ -105,6 +105,12 @@
           openAI({ mode: "improve", label: ai.label, entry: ai.entry, text: arr[i],
             onApply: ([t]) => { arr[i] = t; changed(true); } });
         }, "ai"),
+        i < arr.length - 1 && iconBtn("⤵", "Merge with the next bullet", () => {
+          const first = String(arr[i]).trim().replace(/[.;,]\s*$/, ""), second = String(arr[i + 1]).trim();
+          arr[i] = first && second ? `${first}; ${second}` : first || second;
+          arr.splice(i + 1, 1);
+          changed(true, `${path}.${i}`, first && second ? first.length + 2 : "end"); // caret at the join
+        }),
         rowTools(arr, i, { horizontal: true, path: (j) => `${path}.${j}` })));
     });
     const addBtn = h("button", { type: "button", class: "add", onclick: () => { arr.push(""); changed(true, `${path}.${arr.length - 1}`); } }, "+ " + addLabel);
@@ -130,7 +136,7 @@
       const el = formEl.querySelector(`[data-path="${CSS.escape(keepPath)}"]`);
       if (el) {
         el.focus({ preventScroll: focusPath === undefined });
-        const pos = caret === "end" ? el.value.length : caret === 0 ? 0 : focusPath === undefined ? selStart : el.value.length;
+        const pos = typeof caret === "number" ? caret : caret === "end" ? el.value.length : focusPath === undefined ? selStart : el.value.length;
         if (pos != null) try { el.setSelectionRange(pos, pos); } catch (e) { /* not a text field */ }
       }
     }
@@ -663,7 +669,27 @@
     return target;
   }
 
-  function showField(path) {
+  // "s0.1.b.3" -> { prefix: "s0.1.b", idx: 3 } for bullet ids, otherwise null.
+  function bulletParts(path) {
+    const m = /^(.*\.b)\.(\d+)$/.exec(String(path || ""));
+    return m ? { prefix: m[1], idx: +m[2] } : null;
+  }
+
+  // Current id of the field that holds `text`. Bullets may have moved since the review
+  // (merges, deletions, reordering, undo), so they are found by their text in the same list.
+  function locate(path, text) {
+    const t = resolvePath(path);
+    if (t && String(t[0][t[1]] ?? "") === text) return path;
+    const bp = bulletParts(path);
+    if (!bp) return null;
+    const first = resolvePath(bp.prefix + ".0");
+    if (!first) return null;
+    const i = first[0].findIndex((x) => String(x ?? "") === text);
+    return i >= 0 ? `${bp.prefix}.${i}` : null;
+  }
+
+  function showField(path, text) {
+    if (text !== undefined) path = locate(path, text) || path;
     document.querySelectorAll("dialog[open]").forEach((d) => d.close());
     const m = /^s(\d+)/.exec(path);
     if (m && cv.sections[+m[1]]) collapsed.delete(cv.sections[+m[1]]);
@@ -678,8 +704,10 @@
     }
   }
 
+  // Replace one field's text (spell-check fixes and simple review fixes).
   function applyFix(issue, text) {
-    const target = resolvePath(issue.field);
+    const path = locate(issue.field, issue.original) || issue.field;
+    const target = resolvePath(path);
     if (!target) { toast("That field no longer exists. Run the review again.", true); return false; }
     const [obj, key] = target;
     const current = obj[key] == null ? "" : String(obj[key]);
@@ -690,6 +718,44 @@
     obj[key] = text;
     changed(true);
     return true;
+  }
+
+  // Review fix that may also remove bullets (merge two bullets, or cut one). One undo step.
+  function applyReviewFix(issue, text) {
+    const dels = issue.delete || [];
+    if (!dels.length) return applyFix(issue, text);
+    const removeMain = dels.includes(issue.field);
+    let main = locate(issue.field, issue.original);
+    if (!main) {
+      const now = resolvePath(issue.field);
+      if (!now || removeMain) { toast("That bullet changed since the review. Run the review again.", true); return false; }
+      if (!confirm("This text changed since the review. Apply the suggestion anyway?\n\nNow: " + now[0][now[1]])) return false;
+      main = issue.field;
+    }
+    const toRemove = [];
+    let kept = 0;
+    for (const d of dels) {
+      if (d === issue.field) continue;
+      const p = locate(d, issue.deleteOriginals[d]);
+      if (p) toRemove.push(resolvePath(p)); else kept++; // never delete a bullet whose text changed
+    }
+    if (removeMain) toRemove.push(resolvePath(main));
+    else { const [obj, key] = resolvePath(main); obj[key] = text; }
+    // Remove from the highest index down so earlier indices stay valid.
+    toRemove.filter(Boolean).sort((a, b) => b[1] - a[1]).forEach(([arr, i]) => arr.splice(i, 1));
+    changed(true);
+    if (kept) toast(`${kept} bullet(s) to remove had changed since the review, so they were kept.`, true);
+    return true;
+  }
+
+  // Applied = the CV currently reflects the fix (so Undo un-applies it).
+  function reviewApplied(issue) {
+    const dels = issue.delete || [];
+    const gone = (p, txt) => !locate(p, txt);
+    const othersGone = dels.every((d) => d === issue.field || gone(d, issue.deleteOriginals[d]));
+    if (dels.includes(issue.field)) return gone(issue.field, issue.original) && othersGone;
+    if (!issue.replacement) return false;
+    return !!locate(issue.field, issue.replacement) && othersGone;
   }
 
   function renderReview(r) {
@@ -706,23 +772,43 @@
     if (r.issues.length) {
       nodes.push(h("div", { class: "reviewH" }, `What to improve (${r.issues.length})`));
       for (const issue of r.issues) {
-        // A fix counts as applied while the field still holds the suggested text (so Undo un-applies it).
-        const target = issue.field && issue.replacement ? resolvePath(issue.field) : null;
-        issue.applied = !!target && String(target[0][target[1]] ?? "") === issue.replacement;
+        const dels = issue.delete || [];
+        const removeMain = dels.includes(issue.field);
+        const others = dels.filter((d) => d !== issue.field);
+        issue.applied = reviewApplied(issue);
         const card = h("div", { class: `issue ${issue.severity}${issue.applied ? " done" : ""}` });
-        const head = h("div", { class: "issueHead" },
-          h("span", { class: "sev " + issue.severity }, issue.severity),
-          h("span", { class: "issueWhere" }, issue.where),
-          issue.field ? h("button", { type: "button", class: "icon", title: "Go to this field in the editor", onclick: () => showField(issue.field) }, "Show") : null);
-        card.append(head, h("p", {}, issue.problem), issue.suggestion ? h("p", { class: "sugg" }, "→ " + issue.suggestion) : null);
-        if (issue.field && issue.replacement) {
-          const ta = h("textarea", { rows: 1, value: issue.replacement, title: "Suggested text. You can edit it before applying." });
+        card.append(
+          h("div", { class: "issueHead" },
+            h("span", { class: "sev " + issue.severity }, issue.severity),
+            h("span", { class: "issueWhere" }, issue.where),
+            issue.field ? h("button", { type: "button", class: "icon", title: "Go to this field in the editor",
+              onclick: () => showField(issue.field, issue.original) }, "Show") : null),
+          h("p", {}, issue.problem),
+          issue.suggestion ? h("p", { class: "sugg" }, "→ " + issue.suggestion) : null);
+
+        const label = issue.applied ? "Applied ✓" : removeMain ? "Remove bullet" : others.length ? "Merge" : "Apply";
+        const btn = h("button", { type: "button", class: "primary", disabled: issue.applied }, label);
+        let ta = null;
+        if (issue.field && issue.replacement && !removeMain) {
+          ta = h("textarea", { rows: 1, value: issue.replacement, title: "Suggested text. You can edit it before applying." });
           ta.addEventListener("input", () => autoGrow(ta));
-          const btn = h("button", { type: "button", class: "primary", disabled: !!issue.applied, onclick: () => {
-            if (applyFix(issue, ta.value.trim())) { card.classList.add("done"); btn.textContent = "Applied ✓"; btn.disabled = true; toast("Applied. Undo reverts it."); }
-          } }, issue.applied ? "Applied ✓" : "Apply");
           card.append(h("div", { class: "repl" }, ta, btn));
           setTimeout(() => autoGrow(ta), 0);
+        }
+        if (removeMain || others.length) {
+          card.append(h("div", { class: "removes" },
+            h("span", { class: "hint" }, removeMain ? "Removes this bullet:" : "Also removes:"),
+            ...(removeMain ? [issue.field] : others).map((d) =>
+              h("div", { class: "fixText" }, h("del", {}, (removeMain ? issue.original : issue.deleteOriginals[d]) || "(empty bullet)")))));
+          if (removeMain) card.append(h("div", { class: "issueBtns" }, btn));
+        }
+        if (ta || removeMain) {
+          btn.onclick = () => {
+            if (applyReviewFix(issue, ta ? ta.value.trim() : "")) {
+              renderReview(lastReview);
+              toast((removeMain ? "Bullet removed." : others.length ? "Bullets merged." : "Applied.") + " Undo reverts it.");
+            }
+          };
         }
         nodes.push(card);
       }
@@ -816,7 +902,7 @@
       return h("div", { class: "fix" + (applied ? " done" : "") },
         h("div", { class: "issueHead" },
           h("span", { class: "issueWhere" }, c.where),
-          h("button", { type: "button", class: "icon", title: "Go to this field in the editor", onclick: () => showField(c.field) }, "Show"),
+          h("button", { type: "button", class: "icon", title: "Go to this field in the editor", onclick: () => showField(c.field, c.original) }, "Show"),
           h("button", { type: "button", class: "primary", disabled: applied, onclick: () => {
             if (applyFix(c, c.replacement)) { renderProof(lastProof); toast("Fixed. Undo reverts it."); }
           } }, applied ? "Applied ✓" : "Apply")),

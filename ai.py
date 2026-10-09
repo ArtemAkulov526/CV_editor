@@ -67,6 +67,11 @@ the CV as a whole or something missing.
 - "replacement" is the complete new text for that field, ready to paste in. Give one only when \
 you can write it from facts already in the CV. Otherwise leave it "" and say in "suggestion" \
 what information the person should add.
+- "delete" lists bullet point ids to remove when the fix is applied; otherwise it is []. To merge \
+bullet points, set "field" to the bullet that keeps the merged text, put the merged text in \
+"replacement", and list the other bullet ids in "delete". To cut a bullet point, set "field" to \
+it, leave "replacement" empty, and list the same id in "delete". Only bullet point ids (those \
+containing ".b.") can be deleted.
 - Replacement text follows these rules:
 """ + STYLE_RULES + """
 - Write the feedback in English, plainly and directly. The score is 1-10, where 10 means ready \
@@ -106,8 +111,9 @@ REVIEW_SCHEMA = {
                     "problem": {"type": "string"},
                     "suggestion": {"type": "string"},
                     "replacement": {"type": "string"},
+                    "delete": {"type": "array", "items": {"type": "string"}},
                 },
-                "required": ["severity", "field", "where", "problem", "suggestion", "replacement"],
+                "required": ["severity", "field", "where", "problem", "suggestion", "replacement", "delete"],
                 "additionalProperties": False,
             },
         },
@@ -410,6 +416,11 @@ def review(req: dict) -> dict:
         path = it.get("field") or ""
         if path not in fields:
             path = ""
+        # Bullets to remove (merge / cut). Only existing bullet ids, and only with a target field.
+        delete = []
+        for d in it.get("delete") or []:
+            if path and d in fields and re.search(r"\.b\.\d+$", d) and d not in delete:
+                delete.append(d)
         issues.append({
             "severity": it.get("severity") if it.get("severity") in order else "low",
             "field": path,
@@ -418,6 +429,8 @@ def review(req: dict) -> dict:
             "suggestion": rd.restore(it.get("suggestion", "")),
             "replacement": rd.restore((it.get("replacement") or "").strip()) if path else "",
             "original": fields[path][1] if path else "",
+            "delete": delete,
+            "deleteOriginals": {d: fields[d][1] for d in delete},
         })
     issues.sort(key=lambda x: order[x["severity"]])
     return {"summary": rd.restore(data.get("summary", "")), "score": data.get("score"),
