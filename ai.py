@@ -68,10 +68,25 @@ information they cannot disclose because of an NDA. Never suggest adding somethi
 they cannot share; instead suggest what they can say within that limit (for example scale, \
 technical challenges, tools, or results described in general terms). <dismissed_feedback> lists \
 earlier suggestions the person rejected, with their reasons. Do not repeat them, or close variants \
-of them, unless the CV has changed in a way that makes them clearly relevant again.
+of them, unless the CV has changed in a way that makes them clearly relevant again. \
+<applied_earlier> lists changes the person already made on the advice of earlier reviews. Treat \
+them as settled: do not reword them again, do not reverse them, and do not raise the same point \
+again. Flag one only if it contains a clear error (spelling, grammar, a factual mistake).
+
+Stay stable across reviews. The person will run this review repeatedly while editing, so:
+- Report only problems that would change a recruiter's impression or an ATS match. Fewer is \
+better. If the CV is in good shape, report few issues or none; that is a valid result. Never pad \
+the list to reach a number.
+- Never propose a rewrite just to make text sound different. Every rewrite must fix a problem you \
+can name (vague, wrong, inconsistent, too long, irrelevant, weak verb, missing key fact). Do not \
+reword text that has no such problem.
+- Do not undo choices the person deliberately made (for example adding or removing a qualifier \
+such as "basic") unless they are clearly wrong.
+- A rewrite must keep the conventions the rest of the CV uses (for example whether descriptions \
+and bullets end with a period), so that fixing one thing never creates a new inconsistency.
 
 How to report issues:
-- Report at most 12 issues, the most important first. Skip trivia.
+- Report at most 8 issues, the most important first, and often fewer. Skip trivia.
 - Each issue refers to one field by its id from the <fields> list, or field "" when it concerns \
 the CV as a whole or something missing.
 - "replacement" is the complete new text for that field, ready to paste in. Give one only when \
@@ -88,8 +103,16 @@ the CV, ready to use), and set "before" to the id of the section it should go be
 example "s0" for the top), or "" for the end. For every other issue, leave all three empty.
 - Replacement text follows these rules:
 """ + STYLE_RULES + """
-- Write the feedback in English, plainly and directly. The score is 1-10, where 10 means ready \
-to send for the target role."""
+- Write the feedback in English, plainly and directly.
+
+Score the CV as it is now, not by how many issues you found, using this scale:
+9-10: ready to send; at most cosmetic polish left.
+7-8: good; a few improvements would help, but nothing that hurts the application.
+5-6: real gaps, such as weak or missing bullet points for the main role, or no clear profile.
+3-4: major problems: missing key information, many errors, or a confusing structure.
+1-2: not usable yet.
+When earlier advice has been applied (see <applied_earlier>) and no new real problems remain, the \
+score should reflect that progress."""
 
 TASKS = {
     "bullets": "Write {count} distinct bullet points for the entry below, based on the user's notes. "
@@ -349,6 +372,22 @@ def _author_notes(cv: dict) -> str:
     return f"<author_notes>\n{notes}\n</author_notes>" if notes else ""
 
 
+def _applied_earlier(cv: dict) -> str:
+    items = [a for a in (cv.get("ai") or {}).get("applied") or [] if isinstance(a, dict)][-40:]
+    if not items:
+        return ""
+    def cut(s, n=160):
+        s = str(s or "").replace("\n", " ")
+        return s if len(s) <= n else s[:n] + "…"
+    lines = []
+    for a in items:
+        line = f"- {a.get('where', '')} (problem: {cut(a.get('problem'), 120)})"
+        if a.get("before") or a.get("after"):
+            line += f': "{cut(a.get("before"))}" -> "{cut(a.get("after"))}"'
+        lines.append(line)
+    return "<applied_earlier>\n" + "\n".join(lines) + "\n</applied_earlier>"
+
+
 def _dismissed_feedback(cv: dict) -> str:
     items = [d for d in (cv.get("ai") or {}).get("dismissed") or [] if isinstance(d, dict)][-30:]
     if not items:
@@ -443,7 +482,8 @@ def review(req: dict) -> dict:
     lines = [f"[{path}] {label}: {json.dumps(text, ensure_ascii=False)}" for path, (label, text) in shown.items()]
     parts = [f"<fields>\n" + "\n".join(lines) + "\n</fields>",
              f"<today>{date.today().isoformat()}</today>"]
-    parts += [block for block in (_author_notes(shown_cv), _dismissed_feedback(shown_cv)) if block]
+    parts += [block for block in (_author_notes(shown_cv), _applied_earlier(shown_cv), _dismissed_feedback(shown_cv))
+              if block]
     layout = req.get("layout") or {}
     if layout.get("pages"):
         free = layout.get("freeFrac")

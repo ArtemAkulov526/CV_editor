@@ -730,7 +730,7 @@
   }
 
   // Replace one field's text (spell-check fixes and simple review fixes).
-  function applyFix(issue, text) {
+  function applyFix(issue, text, remember = false) {
     const path = locate(issue.field, issue.original) || issue.field;
     const target = resolvePath(path);
     if (!target) { toast("That field no longer exists. Run the review again.", true); return false; }
@@ -741,6 +741,7 @@
       return false;
     }
     obj[key] = text;
+    if (remember) rememberApplied(issue, current, text);
     changed(true);
     return true;
   }
@@ -748,7 +749,7 @@
   // Review fix that may also remove bullets (merge two bullets, or cut one). One undo step.
   function applyReviewFix(issue, text) {
     const dels = issue.delete || [];
-    if (!dels.length) return applyFix(issue, text);
+    if (!dels.length) return applyFix(issue, text, true);
     const removeMain = dels.includes(issue.field);
     let main = locate(issue.field, issue.original);
     if (!main) {
@@ -764,8 +765,15 @@
       const p = locate(d, issue.deleteOriginals[d]);
       if (p) toRemove.push(resolvePath(p)); else kept++; // never delete a bullet whose text changed
     }
-    if (removeMain) toRemove.push(resolvePath(main));
-    else { const [obj, key] = resolvePath(main); obj[key] = text; }
+    const removedTexts = toRemove.filter(Boolean).map(([arr, i]) => arr[i]);
+    if (removeMain) {
+      toRemove.push(resolvePath(main));
+      rememberApplied(issue, issue.original, "(bullet removed)");
+    } else {
+      const [obj, key] = resolvePath(main);
+      rememberApplied(issue, [obj[key], ...removedTexts].join(" + "), text + " (merged)");
+      obj[key] = text;
+    }
     // Remove from the highest index down so earlier indices stay valid.
     toRemove.filter(Boolean).sort((a, b) => b[1] - a[1]).forEach(([arr, i]) => arr.splice(i, 1));
     changed(true);
@@ -789,6 +797,7 @@
     if (at < 0) at = cv.sections.length;
     cv.sections.splice(at, 0, { title, type: "text", text });
     ns.added = { title, text };
+    rememberApplied(issue, "", `New section “${title}”: ${text}`);
     changed(true);
     return true;
   }
@@ -807,7 +816,14 @@
   function aiMeta() {
     if (!cv.ai || typeof cv.ai !== "object") cv.ai = {};
     if (!Array.isArray(cv.ai.dismissed)) cv.ai.dismissed = [];
+    if (!Array.isArray(cv.ai.applied)) cv.ai.applied = [];
     return cv.ai;
+  }
+  // Review memory: fixes applied on the review's advice. Later reviews treat them as settled, so
+  // they don't reword or reverse them. Recorded before changed(), so Undo forgets it too.
+  function rememberApplied(issue, before, after) {
+    const meta = aiMeta();
+    meta.applied = [...meta.applied, { where: issue.where, problem: issue.problem, before, after }].slice(-40);
   }
   function dismissedIndex(issue) {
     const list = (cv.ai && cv.ai.dismissed) || [];
@@ -826,11 +842,18 @@
     renderReview(lastReview);
   }
 
-  function dismissedList() {
+  function reviewMemory() {
     const list = (cv.ai && cv.ai.dismissed) || [];
-    if (!list.length) return null;
+    const applied = (cv.ai && cv.ai.applied) || [];
+    if (!list.length && !applied.length) return null;
     return h("details", { class: "dismissed" },
-      h("summary", {}, `Dismissed suggestions (${list.length}): the review is told not to repeat these`),
+      h("summary", {}, `Review memory: ${applied.length} applied, ${list.length} dismissed. The review won't repeat or undo these`),
+      applied.length ? h("div", { class: "dismissedRow" },
+        h("div", { class: "dismissedText" }, `${applied.length} change${applied.length > 1 ? "s" : ""} made on earlier advice ` +
+          "are treated as settled, so the review won't reword them again."),
+        h("button", { type: "button", class: "icon", title: "Let the next review look at everything with fresh eyes",
+          onclick: () => { aiMeta().applied = []; changed(true); renderReview(lastReview); toast("Forgotten. The next review starts fresh."); } },
+          "Forget")) : null,
       list.map((d, i) => h("div", { class: "dismissedRow" },
         h("div", { class: "dismissedText" }, h("b", {}, d.where + ": "), d.problem,
           d.reason ? h("div", { class: "hint" }, "Your reason: " + d.reason) : null),
@@ -925,7 +948,12 @@
         nodes.push(card);
       }
     }
-    nodes.push(dismissedList());
+    if (!visible.length) {
+      nodes.push(h("div", { class: "proofOk" }, r.issues.length
+        ? "✓ Nothing left to fix apart from suggestions you dismissed."
+        : "✓ No important issues found."));
+    }
+    nodes.push(reviewMemory());
     nodes.push(h("p", { class: "hint" }, "AI feedback can be wrong. Use your judgment, and run the review again after making changes."));
     out.replaceChildren(...nodes.filter(Boolean));
   }

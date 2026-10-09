@@ -18,6 +18,7 @@ A local editor for a one-page CV in the classic LaTeX résumé style. You edit y
   - Suggests better wording for a bullet point, headlines, and a short summary paragraph.
   - **Review CV** gives recruiter-style feedback: a score, strengths, and issues ranked by importance. Most fixes can be applied with one click, including merging two bullet points, cutting one, or adding a missing section such as a Summary. You can paste a job posting to tailor the review.
   - **Notes for the AI** give the review and the writing helper context they must respect, e.g. "I can't disclose what data I collect or for which clients (NDA)". **Dismiss** a suggestion, optionally with a reason, and the next review won't repeat it. Both are saved with your CV.
+  - **Review memory:** fixes you apply from a review are remembered, so later reviews treat them as settled instead of rewording or reversing them. Repeated reviews converge instead of going in circles. **Forget** in the review dialog clears the memory for a fresh look.
 
 ## Quick start
 
