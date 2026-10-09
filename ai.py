@@ -82,6 +82,10 @@ bullet points, set "field" to the bullet that keeps the merged text, put the mer
 "replacement", and list the other bullet ids in "delete". To cut a bullet point, set "field" to \
 it, leave "replacement" empty, and list the same id in "delete". Only bullet point ids (those \
 containing ".b.") can be deleted.
+- "new_section" proposes a section that does not exist yet, such as a short Summary. Set \
+"field" to "", fill in the section "title" and its complete "text" (written only from facts in \
+the CV, ready to use), and set "before" to the id of the section it should go before (for \
+example "s0" for the top), or "" for the end. For every other issue, leave all three empty.
 - Replacement text follows these rules:
 """ + STYLE_RULES + """
 - Write the feedback in English, plainly and directly. The score is 1-10, where 10 means ready \
@@ -92,6 +96,11 @@ TASKS = {
                "Cover different aspects of the work rather than rephrasing one point.",
     "improve": "Rewrite the bullet point below in {count} different ways. Keep the meaning and facts; "
                "make it clearer, more specific and more impactful.",
+    "summary": "Write {count} alternative versions of a short professional summary for the top of the CV: "
+               "2-3 sentences, 35-70 words, based only on facts in the CV and the user's notes. Start with the "
+               "role and core stack, then the most relevant experience and strengths, matching the target "
+               "position if given. Present tense is fine here. No 'I', no clichés such as 'passionate' or "
+               "'results-driven', and no bullet points.",
     "headline": "Suggest {count} short professional headlines (2-8 words, e.g. 'Python Backend Developer') "
                 "to place under the person's name, matching the CV and the target position if given. "
                 "No punctuation at the end.",
@@ -122,8 +131,18 @@ REVIEW_SCHEMA = {
                     "suggestion": {"type": "string"},
                     "replacement": {"type": "string"},
                     "delete": {"type": "array", "items": {"type": "string"}},
+                    "new_section": {
+                        "type": "object",
+                        "properties": {
+                            "title": {"type": "string"},
+                            "text": {"type": "string"},
+                            "before": {"type": "string"},
+                        },
+                        "required": ["title", "text", "before"],
+                        "additionalProperties": False,
+                    },
                 },
-                "required": ["severity", "field", "where", "problem", "suggestion", "replacement", "delete"],
+                "required": ["severity", "field", "where", "problem", "suggestion", "replacement", "delete", "new_section"],
                 "additionalProperties": False,
             },
         },
@@ -451,6 +470,15 @@ def review(req: dict) -> dict:
         for d in it.get("delete") or []:
             if path and d in fields and re.search(r"\.b\.\d+$", d) and d not in delete:
                 delete.append(d)
+        # A proposed new paragraph section (e.g. Summary). "beforeTitle" lets the editor find the
+        # right place even if sections move before the suggestion is applied.
+        new_section = None
+        ns = it.get("new_section") or {}
+        if not path and (ns.get("title") or "").strip() and (ns.get("text") or "").strip():
+            before = ns.get("before") or ""
+            before_title = fields[f"{before}.title"][1] if f"{before}.title" in fields else ""
+            new_section = {"title": rd.restore(ns["title"].strip()), "text": rd.restore(ns["text"].strip()),
+                           "before": before if before_title else "", "beforeTitle": before_title}
         issues.append({
             "severity": it.get("severity") if it.get("severity") in order else "low",
             "field": path,
@@ -461,6 +489,7 @@ def review(req: dict) -> dict:
             "original": fields[path][1] if path else "",
             "delete": delete,
             "deleteOriginals": {d: fields[d][1] for d in delete},
+            "newSection": new_section,
         })
     issues.sort(key=lambda x: order[x["severity"]])
     return {"summary": rd.restore(data.get("summary", "")), "score": data.get("score"),

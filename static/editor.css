@@ -303,3 +303,5 @@ details.dismissed { margin: 10px 0 4px; font-size: 13px; }
 details.dismissed summary { cursor: pointer; color: var(--muted); }
 .dismissedRow { display: flex; gap: 8px; align-items: flex-start; padding: 6px 0; border-bottom: 1px solid var(--border); }
 .dismissedText { flex: 1; line-height: 1.45; }
+.newSection { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+.newSection input { font-weight: 600; }

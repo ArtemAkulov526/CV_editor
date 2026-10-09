@@ -210,7 +210,11 @@
 
     let body = [];
     if (type === "text") {
-      body = [bound(sec, "text", { multiline: true, path: `${p}.text`, placeholder: "A few sentences. Leave an empty line between paragraphs." })];
+      body = [bound(sec, "text", { multiline: true, path: `${p}.text`, placeholder: "A few sentences. Leave an empty line between paragraphs." }),
+        h("div", { class: "addRow", style: "margin-top:6px" }, h("button", { type: "button", class: "add ai",
+          title: "Write or rewrite this paragraph from your CV",
+          onclick: () => openAI({ mode: "summary", label: sec.title || "this section",
+            onApply: ([t]) => { sec.text = t; changed(true); } }) }, "✨ Write with AI"))];
     } else {
       if (!Array.isArray(sec.items)) sec.items = [];
       const items = sec.items;
@@ -503,7 +507,8 @@
 
   async function openAI(req) {
     aiReq = req;
-    const titles = { bullets: "Write bullet points with AI", improve: "Improve a bullet point", headline: "Suggest a headline" };
+    const titles = { bullets: "Write bullet points with AI", improve: "Improve a bullet point", headline: "Suggest a headline",
+      summary: "Write a summary with AI" };
     $("aiTitle").textContent = "✨ " + titles[req.mode];
     $("aiContext").replaceChildren(...(req.mode === "improve"
       ? ["For ", h("b", {}, req.label || "this entry"), ". Current text: “" + req.text + "”"]
@@ -514,11 +519,15 @@
     $("aiNotesField").hidden = req.mode === "improve";
     $("aiNotesLabel").textContent = req.mode === "headline"
       ? "Position you're looking for (optional)"
-      : "What did you do there? Rough notes in any language are fine.";
+      : req.mode === "summary"
+        ? "Anything to emphasise? (optional, any language)"
+        : "What did you do there? Rough notes in any language are fine.";
     $("aiNotes").value = req.mode === "bullets" ? (aiNotes.get(req.notesKey) || "") : req.mode === "headline" ? (req.text || "") : "";
     $("aiNotes").placeholder = req.mode === "bullets"
       ? "e.g. made REST API on FastAPI for orders, wrote tests with pytest, set up Docker, sped up slow SQL queries"
-      : "e.g. Junior Python developer, backend";
+      : req.mode === "summary"
+        ? "e.g. focus on scraping and async backend work, looking for a backend role"
+        : "e.g. Junior Python developer, backend";
     $("aiCount").value = req.mode === "bullets" ? "4" : "3";
     $("aiExtra").value = "";
     $("aiResults").replaceChildren();
@@ -679,6 +688,21 @@
   // Current id of the field that holds `text`. Bullets may have moved since the review
   // (merges, deletions, reordering, undo), so they are found by their text in the same list.
   function locate(path, text) {
+    const hit = locateInSection(path, text);
+    if (hit) return hit;
+    // The section may have moved (e.g. a Summary was added above it): try the others, nearest first.
+    const m = /^s(\d+)\.(.+)$/.exec(String(path || ""));
+    if (!m) return null;
+    const idx = +m[1];
+    const others = cv.sections.map((_, k) => k).filter((k) => k !== idx).sort((a, b) => Math.abs(a - idx) - Math.abs(b - idx));
+    for (const k of others) {
+      const found = locateInSection(`s${k}.${m[2]}`, text);
+      if (found) return found;
+    }
+    return null;
+  }
+
+  function locateInSection(path, text) {
     const t = resolvePath(path);
     if (t && String(t[0][t[1]] ?? "") === text) return path;
     const bp = bulletParts(path);
@@ -749,6 +773,26 @@
     return true;
   }
 
+  // A section proposed by the review (e.g. Summary): index of the added section, or -1.
+  function newSectionIndex(issue) {
+    const added = issue.newSection.added || issue.newSection;
+    return cv.sections.findIndex((sec) => sec.type === "text" && sec.title === added.title && sec.text === added.text);
+  }
+
+  function applyNewSection(issue, title, text) {
+    if (!text) { toast("The section text is empty.", true); return false; }
+    const same = (a, b) => String(a || "").trim().toLowerCase() === String(b || "").trim().toLowerCase();
+    if (cv.sections.some((sec) => same(sec.title, title)) &&
+        !confirm(`There is already a section called “${title}”. Add another one?`)) return false;
+    const ns = issue.newSection;
+    let at = ns.beforeTitle ? cv.sections.findIndex((sec) => same(sec.title, ns.beforeTitle)) : -1;
+    if (at < 0) at = cv.sections.length;
+    cv.sections.splice(at, 0, { title, type: "text", text });
+    ns.added = { title, text };
+    changed(true);
+    return true;
+  }
+
   // Applied = the CV currently reflects the fix (so Undo un-applies it).
   function reviewApplied(issue) {
     const dels = issue.delete || [];
@@ -811,7 +855,7 @@
         const dels = issue.delete || [];
         const removeMain = dels.includes(issue.field);
         const others = dels.filter((d) => d !== issue.field);
-        issue.applied = reviewApplied(issue);
+        issue.applied = issue.newSection ? newSectionIndex(issue) >= 0 : reviewApplied(issue);
         const card = h("div", { class: `issue ${issue.severity}${issue.applied ? " done" : ""}` });
         card.append(
           h("div", { class: "issueHead" },
@@ -819,6 +863,8 @@
             h("span", { class: "issueWhere" }, issue.where),
             issue.field ? h("button", { type: "button", class: "icon", title: "Go to this field in the editor",
               onclick: () => showField(issue.field, issue.original) }, "Show") : null,
+            issue.newSection && issue.applied ? h("button", { type: "button", class: "icon", title: "Go to the new section",
+              onclick: () => showField(`s${newSectionIndex(issue)}.text`) }, "Show") : null,
             h("button", { type: "button", class: "icon", title: "Not applicable? Dismiss it and tell the AI why",
               onclick: () => {
                 if (card.querySelector(".dismissRow")) return;
@@ -849,6 +895,24 @@
             ...(removeMain ? [issue.field] : others).map((d) =>
               h("div", { class: "fixText" }, h("del", {}, (removeMain ? issue.original : issue.deleteOriginals[d]) || "(empty bullet)")))));
           if (removeMain) card.append(h("div", { class: "issueBtns" }, btn));
+        }
+        if (issue.newSection) {
+          const ns = issue.newSection;
+          const added = ns.added || ns;
+          const titleIn = h("input", { type: "text", value: added.title, title: "Section title" });
+          const textIn = h("textarea", { rows: 2, value: added.text, title: "Section text. You can edit it before adding." });
+          textIn.addEventListener("input", () => autoGrow(textIn));
+          setTimeout(() => autoGrow(textIn), 0);
+          const where = ns.beforeTitle ? `Goes above “${ns.beforeTitle}”.` : "Goes at the end of the CV.";
+          btn.textContent = issue.applied ? "Added ✓" : "Add section";
+          btn.onclick = () => {
+            if (applyNewSection(issue, titleIn.value.trim() || "Summary", textIn.value.trim())) {
+              renderReview(lastReview);
+              toast("Section added. Undo removes it.");
+            }
+          };
+          card.append(h("div", { class: "newSection" },
+            h("div", { class: "hint" }, "New section. " + where), titleIn, textIn, h("div", { class: "issueBtns" }, btn)));
         }
         if (ta || removeMain) {
           btn.onclick = () => {
