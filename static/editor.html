@@ -107,6 +107,11 @@
     <summary>Tailor the review to a job posting (optional)</summary>
     <textarea id="reviewJob" rows="5" placeholder="Paste the vacancy text here. The review then checks how well your CV fits it."></textarea>
   </details>
+  <details id="reviewNotesBox">
+    <summary>Notes for the AI (optional)</summary>
+    <textarea id="reviewNotes" rows="3" placeholder="Context the AI should respect, e.g. “I can't disclose what data I collect or for which clients (NDA), so don't suggest adding it.”"></textarea>
+    <p class="hint" style="margin:4px 0 0">Saved with your CV. Also used when the AI writes bullet points.</p>
+  </details>
   <div class="aiRow">
     <label class="aiCount">Model <select id="reviewModel" data-kind="review"></select></label>
     <label class="aiCount privacyToggle" title="Your name, email, phone, handles and links are replaced with placeholders like [NAME] before anything is sent to the AI, and put back in the answer."><input type="checkbox" class="privacy" checked> Hide personal details</label>

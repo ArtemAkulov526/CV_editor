@@ -293,3 +293,13 @@ dialog.proofDialog { width: min(760px, 96vw); max-height: 92vh; }
 .removes { margin-top: 6px; }
 .removes .fixText { margin: 2px 0 0; }
 .issueBtns { justify-content: flex-end; margin-top: 6px; }
+
+/* Notes for the AI and dismissed suggestions */
+#reviewNotesBox { margin: 0 0 10px; font-size: 13px; }
+#reviewNotesBox summary { cursor: pointer; color: var(--accent); margin-bottom: 6px; }
+.dismissRow { display: flex; gap: 6px; align-items: center; margin-top: 8px; }
+.dismissRow input { flex: 1; }
+details.dismissed { margin: 10px 0 4px; font-size: 13px; }
+details.dismissed summary { cursor: pointer; color: var(--muted); }
+.dismissedRow { display: flex; gap: 8px; align-items: flex-start; padding: 6px 0; border-bottom: 1px solid var(--border); }
+.dismissedText { flex: 1; line-height: 1.45; }

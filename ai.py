@@ -44,7 +44,10 @@ is clearly in another language; write in the CV's language even when the user's 
 another language (for example Ukrainian or Russian).
 
 Rules for everything you write:
-""" + STYLE_RULES
+""" + STYLE_RULES + """
+- If <author_notes> are given, follow them. They are the person's own context and constraints \
+(for example information they are not allowed to disclose); never hint at anything they say \
+they cannot share."""
 
 REVIEW_SYSTEM = """You are an experienced tech recruiter and hiring manager reviewing a software \
 engineer's CV. Give honest, specific, actionable feedback that would most improve the person's \
@@ -59,6 +62,13 @@ applicant tracking systems would look for.
 capitalisation, naming of technologies.
 - Language: grammar, spelling, unnatural phrasing (the author is not a native English speaker).
 - Structure: section order, what to emphasise or cut, and use of space on the page.
+
+The person may add <author_notes>: context and constraints you must respect, for example \
+information they cannot disclose because of an NDA. Never suggest adding something they say \
+they cannot share; instead suggest what they can say within that limit (for example scale, \
+technical challenges, tools, or results described in general terms). <dismissed_feedback> lists \
+earlier suggestions the person rejected, with their reasons. Do not repeat them, or close variants \
+of them, unless the CV has changed in a way that makes them clearly relevant again.
 
 How to report issues:
 - Report at most 12 issues, the most important first. Skip trivia.
@@ -311,8 +321,24 @@ class Redactor:
 
 def _cv_as_text(cv: dict) -> str:
     """Compact JSON of the CV content, without editor-only settings."""
-    data = {k: v for k, v in cv.items() if k not in ("style", "fileName")}
+    data = {k: v for k, v in cv.items() if k not in ("style", "fileName", "ai")}
     return json.dumps(data, ensure_ascii=False, indent=1)
+
+
+def _author_notes(cv: dict) -> str:
+    notes = ((cv.get("ai") or {}).get("notes") or "").strip()
+    return f"<author_notes>\n{notes}\n</author_notes>" if notes else ""
+
+
+def _dismissed_feedback(cv: dict) -> str:
+    items = [d for d in (cv.get("ai") or {}).get("dismissed") or [] if isinstance(d, dict)][-30:]
+    if not items:
+        return ""
+    lines = []
+    for d in items:
+        reason = (d.get("reason") or "").strip()
+        lines.append(f"- {d.get('where', '')}: {d.get('problem', '')}" + (f" (reason: {reason})" if reason else ""))
+    return "<dismissed_feedback>\n" + "\n".join(lines) + "\n</dismissed_feedback>"
 
 
 def build_prompt(req: dict) -> str:
@@ -323,6 +349,8 @@ def build_prompt(req: dict) -> str:
     cv = req.get("cv") or {}
 
     parts = [f"<cv>\n{_cv_as_text(cv)}\n</cv>"]
+    if _author_notes(cv):
+        parts.append(_author_notes(cv))
     if cv.get("headline"):
         parts.append(f"<target_position>{cv['headline']}</target_position>")
     if req.get("entry"):
@@ -391,10 +419,12 @@ def review(req: dict) -> dict:
     cv = req.get("cv") or {}
     rd = Redactor.for_request(req)
     fields = cv_fields(cv)               # real text: used for "original" and applying fixes
-    shown = cv_fields(rd.obj(cv))        # what the AI sees (same field ids)
+    shown_cv = rd.obj(cv)                # what the AI sees (same field ids)
+    shown = cv_fields(shown_cv)
     lines = [f"[{path}] {label}: {json.dumps(text, ensure_ascii=False)}" for path, (label, text) in shown.items()]
     parts = [f"<fields>\n" + "\n".join(lines) + "\n</fields>",
              f"<today>{date.today().isoformat()}</today>"]
+    parts += [block for block in (_author_notes(shown_cv), _dismissed_feedback(shown_cv)) if block]
     layout = req.get("layout") or {}
     if layout.get("pages"):
         free = layout.get("freeFrac")

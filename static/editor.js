@@ -509,7 +509,8 @@
       ? ["For ", h("b", {}, req.label || "this entry"), ". Current text: “" + req.text + "”"]
       : req.mode === "headline"
         ? ["Based on the rest of your CV. Enter the position you're aiming for if you like."]
-        : ["For ", h("b", {}, req.label || "this entry"), ". The AI also sees the rest of your CV."]));
+        : ["For ", h("b", {}, req.label || "this entry"), ". The AI also sees the rest of your CV",
+           cv.ai && cv.ai.notes ? " and follows your notes for the AI." : "."]));
     $("aiNotesField").hidden = req.mode === "improve";
     $("aiNotesLabel").textContent = req.mode === "headline"
       ? "Position you're looking for (optional)"
@@ -758,6 +759,40 @@
     return !!locate(issue.field, issue.replacement) && othersGone;
   }
 
+  // ---------- notes for the AI and dismissed suggestions (stored in cv.ai) ----------
+  function aiMeta() {
+    if (!cv.ai || typeof cv.ai !== "object") cv.ai = {};
+    if (!Array.isArray(cv.ai.dismissed)) cv.ai.dismissed = [];
+    return cv.ai;
+  }
+  function dismissedIndex(issue) {
+    const list = (cv.ai && cv.ai.dismissed) || [];
+    return list.findIndex((d) => d.where === issue.where && d.problem === issue.problem);
+  }
+  function dismissIssue(issue, reason) {
+    const meta = aiMeta();
+    meta.dismissed = [...meta.dismissed, { where: issue.where, problem: issue.problem, reason: reason.trim() }].slice(-30);
+    changed(true);
+    renderReview(lastReview);
+    toast("Dismissed. The next review will take " + (reason.trim() ? "your reason" : "this") + " into account.");
+  }
+  function restoreDismissed(i) {
+    aiMeta().dismissed.splice(i, 1);
+    changed(true);
+    renderReview(lastReview);
+  }
+
+  function dismissedList() {
+    const list = (cv.ai && cv.ai.dismissed) || [];
+    if (!list.length) return null;
+    return h("details", { class: "dismissed" },
+      h("summary", {}, `Dismissed suggestions (${list.length}): the review is told not to repeat these`),
+      list.map((d, i) => h("div", { class: "dismissedRow" },
+        h("div", { class: "dismissedText" }, h("b", {}, d.where + ": "), d.problem,
+          d.reason ? h("div", { class: "hint" }, "Your reason: " + d.reason) : null),
+        h("button", { type: "button", class: "icon", title: "Show this suggestion again", onclick: () => restoreDismissed(i) }, "Restore"))));
+  }
+
   function renderReview(r) {
     const out = $("reviewOut");
     if (!r) { out.replaceChildren(); return; }
@@ -769,9 +804,10 @@
     if (r.strengths.length) {
       nodes.push(h("div", { class: "reviewH" }, "What works"), h("ul", { class: "strengths" }, r.strengths.map((s) => h("li", {}, s))));
     }
-    if (r.issues.length) {
-      nodes.push(h("div", { class: "reviewH" }, `What to improve (${r.issues.length})`));
-      for (const issue of r.issues) {
+    const visible = r.issues.filter((issue) => dismissedIndex(issue) < 0);
+    if (visible.length) {
+      nodes.push(h("div", { class: "reviewH" }, `What to improve (${visible.length})`));
+      for (const issue of visible) {
         const dels = issue.delete || [];
         const removeMain = dels.includes(issue.field);
         const others = dels.filter((d) => d !== issue.field);
@@ -782,7 +818,19 @@
             h("span", { class: "sev " + issue.severity }, issue.severity),
             h("span", { class: "issueWhere" }, issue.where),
             issue.field ? h("button", { type: "button", class: "icon", title: "Go to this field in the editor",
-              onclick: () => showField(issue.field, issue.original) }, "Show") : null),
+              onclick: () => showField(issue.field, issue.original) }, "Show") : null,
+            h("button", { type: "button", class: "icon", title: "Not applicable? Dismiss it and tell the AI why",
+              onclick: () => {
+                if (card.querySelector(".dismissRow")) return;
+                const why = h("input", { type: "text", placeholder: "Why? (optional), e.g. can't disclose this, NDA" });
+                const go = () => dismissIssue(issue, why.value);
+                why.addEventListener("keydown", (e) => { if (e.key === "Enter") go(); if (e.key === "Escape") row.remove(); });
+                const row = h("div", { class: "dismissRow" }, why,
+                  h("button", { type: "button", onclick: go }, "Dismiss"),
+                  h("button", { type: "button", class: "icon", onclick: () => row.remove() }, "Cancel"));
+                card.append(row);
+                why.focus();
+              } }, "Dismiss")),
           h("p", {}, issue.problem),
           issue.suggestion ? h("p", { class: "sugg" }, "→ " + issue.suggestion) : null);
 
@@ -813,13 +861,16 @@
         nodes.push(card);
       }
     }
+    nodes.push(dismissedList());
     nodes.push(h("p", { class: "hint" }, "AI feedback can be wrong. Use your judgment, and run the review again after making changes."));
-    out.replaceChildren(...nodes);
+    out.replaceChildren(...nodes.filter(Boolean));
   }
 
   async function openReview() {
     try { $("reviewJob").value = localStorage.getItem("cv-review-job") || ""; } catch (e) { /* storage unavailable */ }
     if ($("reviewJob").value) $("reviewJobBox").open = true;
+    $("reviewNotes").value = (cv.ai && cv.ai.notes) || "";
+    if ($("reviewNotes").value) $("reviewNotesBox").open = true;
     renderReview(lastReview);
     $("reviewGo").textContent = lastReview ? "Run again" : "Run review";
     $("reviewDialog").showModal();
@@ -852,6 +903,10 @@
     }
   }
 
+  $("reviewNotes").addEventListener("input", (e) => {
+    aiMeta().notes = e.target.value;
+    changed(false);
+  });
   $("review").onclick = openReview;
   $("reviewGo").onclick = runReview;
   $("reviewClose").onclick = () => $("reviewDialog").close();
