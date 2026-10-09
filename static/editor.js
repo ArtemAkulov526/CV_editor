@@ -164,7 +164,7 @@
     const sp = h("input", { type: "range", min: 0, max: 2, step: 0.05, value: st.spacing == null ? 1 : st.spacing, "data-path": "style.spacing",
       oninput: (e) => { st.spacing = parseFloat(e.target.value); out.value = Math.round(st.spacing * 100) + "%"; changed(false); } });
     return card("layout", "Page & export", null, [
-      field("PDF file name", bound(cv, "fileName", { path: "fileName", placeholder: "e.g. Artem_Akulov_CV" })),
+      field("PDF file name", bound(cv, "fileName", { path: "fileName", placeholder: "e.g. Firstname_Lastname_CV" })),
       h("div", { class: "grid2" },
         field("Font size (pt) — original 9.96", fs),
         field("Vertical spacing", h("div", { class: "rangeRow" }, sp, out))),
