@@ -9,6 +9,7 @@ Two ways to reach Claude, tried in this order:
 """
 import json
 import os
+import re
 import shutil
 import subprocess
 from datetime import date
@@ -222,6 +223,86 @@ def _pick_model(req: dict, kind: str) -> str:
 
 # ---------- writing suggestions ----------
 
+# ---------- privacy: hide personal details from the AI ----------
+
+EMAIL_RE = re.compile(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+")
+# Full URLs, or bare domains with a path such as github.com/user or linkedin.com/in/user.
+URL_RE = re.compile(r"(?:https?://|www\.)[^\s)\]]+|\b[a-z0-9-]+(?:\.[a-z0-9-]+)*\.[a-z]{2,}/[^\s)\]]*", re.I)
+PHONE_RE = re.compile(r"\+?\d[\d\s().-]{6,}\d")
+HANDLE_RE = re.compile(r"(?<![\w.@])@[A-Za-z0-9_]{3,}")
+PLACEHOLDER_RE = re.compile(r"\[(EMAIL|LINK|PHONE|HANDLE)-(\d+)(?::[^\]]*)?\]|\[NAME\]")
+
+PRIVACY_NOTE = ("Note: for privacy, the person's name, email addresses, phone numbers, handles and links were "
+                "replaced with placeholders such as [NAME], [EMAIL-1], [PHONE-1], [HANDLE-1] or "
+                "[LINK-1: github.com]. Treat them as real, correctly filled-in values. If a placeholder appears "
+                "in your answer, keep it exactly as written, and do not comment on the placeholders themselves.")
+
+
+class Redactor:
+    """Swaps personal details for placeholders before a prompt is sent, and swaps them back in the answer."""
+
+    def __init__(self, cv: dict, enabled: bool):
+        self.enabled = enabled
+        self.name = (cv.get("name") or "").strip()
+        self._by_original = {}  # original text -> placeholder
+        self._by_key = {}       # "EMAIL-1" -> original text
+
+    @classmethod
+    def for_request(cls, req: dict) -> "Redactor":
+        return cls(req.get("cv") or {}, enabled=req.get("private", True) is not False)
+
+    def _placeholder(self, kind: str, original: str, label: str = "") -> str:
+        if original not in self._by_original:
+            n = sum(1 for k in self._by_key if k.startswith(kind + "-")) + 1
+            self._by_key[f"{kind}-{n}"] = original
+            self._by_original[original] = f"[{kind}-{n}{': ' + label if label else ''}]"
+        return self._by_original[original]
+
+    def _link(self, m: re.Match) -> str:
+        url = m.group()
+        domain = re.sub(r"^(?:https?://)?(?:www\.)?", "", url, flags=re.I).split("/")[0].lower()
+        return self._placeholder("LINK", url, domain)
+
+    def _phone(self, m: re.Match) -> str:
+        text = m.group()
+        # At least 9 digits, so date ranges such as "2020 - 2024" are left alone.
+        return self._placeholder("PHONE", text) if sum(c.isdigit() for c in text) >= 9 else text
+
+    def text(self, value):
+        if not self.enabled or not isinstance(value, str) or not value:
+            return value
+        t = EMAIL_RE.sub(lambda m: self._placeholder("EMAIL", m.group()), value)
+        t = URL_RE.sub(self._link, t)
+        t = PHONE_RE.sub(self._phone, t)
+        t = HANDLE_RE.sub(lambda m: self._placeholder("HANDLE", m.group()), t)
+        if self.name:
+            t = re.sub(re.escape(self.name), "[NAME]", t, flags=re.I)
+            for part in self.name.split():
+                if len(part) >= 3:  # case-sensitive, so a name like "Will" doesn't hide the word "will"
+                    t = re.sub(rf"\b{re.escape(part)}\b", "[NAME]", t)
+        return t
+
+    def obj(self, value):
+        """Redacted deep copy of a CV (or part of one). The PDF file name is dropped: it contains the name."""
+        if isinstance(value, dict):
+            return {k: self.obj(v) for k, v in value.items() if k != "fileName"}
+        if isinstance(value, list):
+            return [self.obj(v) for v in value]
+        return self.text(value)
+
+    def restore(self, value):
+        if not self.enabled or not isinstance(value, str):
+            return value
+        def back(m: re.Match) -> str:
+            if m.group(0) == "[NAME]":
+                return self.name or m.group(0)
+            return self._by_key.get(f"{m.group(1)}-{m.group(2)}", m.group(0))
+        return PLACEHOLDER_RE.sub(back, value)
+
+    def note(self) -> str:
+        return "\n\n" + PRIVACY_NOTE if self.enabled else ""
+
+
 def _cv_as_text(cv: dict) -> str:
     """Compact JSON of the CV content, without editor-only settings."""
     data = {k: v for k, v in cv.items() if k not in ("style", "fileName")}
@@ -253,12 +334,16 @@ def build_prompt(req: dict) -> str:
 
 
 def suggest(req: dict) -> list:
-    data = _run(build_prompt(req), WRITE_SYSTEM, SUGGEST_SCHEMA, _pick_model(req, "write"), EFFORT["write"])
+    rd = Redactor.for_request(req)
+    shown = dict(req, cv=rd.obj(req.get("cv") or {}), entry=rd.obj(req.get("entry")),
+                 text=rd.text(req.get("text")), instructions=rd.text(req.get("instructions")))
+    prompt = build_prompt(shown) + rd.note()
+    data = _run(prompt, WRITE_SYSTEM, SUGGEST_SCHEMA, _pick_model(req, "write"), EFFORT["write"])
     try:
         suggestions = data["suggestions"]
     except (KeyError, TypeError):
         raise AIError("Got an unexpected answer from the model. Please try again.")
-    return [s.strip().lstrip("•-* ").strip() for s in suggestions if isinstance(s, str) and s.strip()]
+    return [rd.restore(s.strip().lstrip("•-* ").strip()) for s in suggestions if isinstance(s, str) and s.strip()]
 
 
 # ---------- review ----------
@@ -298,8 +383,10 @@ def cv_fields(cv: dict) -> dict:
 
 def review(req: dict) -> dict:
     cv = req.get("cv") or {}
-    fields = cv_fields(cv)
-    lines = [f"[{path}] {label}: {json.dumps(text, ensure_ascii=False)}" for path, (label, text) in fields.items()]
+    rd = Redactor.for_request(req)
+    fields = cv_fields(cv)               # real text: used for "original" and applying fixes
+    shown = cv_fields(rd.obj(cv))        # what the AI sees (same field ids)
+    lines = [f"[{path}] {label}: {json.dumps(text, ensure_ascii=False)}" for path, (label, text) in shown.items()]
     parts = [f"<fields>\n" + "\n".join(lines) + "\n</fields>",
              f"<today>{date.today().isoformat()}</today>"]
     layout = req.get("layout") or {}
@@ -312,7 +399,7 @@ def review(req: dict) -> dict:
         parts.append(f"<target_job_posting>\n{req['job'].strip()}\n</target_job_posting>")
     parts.append("Review this CV" + (" for the job posting above." if (req.get("job") or "").strip() else "."))
 
-    data = _run("\n\n".join(parts), REVIEW_SYSTEM, REVIEW_SCHEMA, _pick_model(req, "review"), EFFORT["review"])
+    data = _run("\n\n".join(parts) + rd.note(), REVIEW_SYSTEM, REVIEW_SCHEMA, _pick_model(req, "review"), EFFORT["review"])
     if not isinstance(data, dict) or not isinstance(data.get("issues"), list):
         raise AIError("Got an unexpected answer from the model. Please try again.")
     order = {"high": 0, "medium": 1, "low": 2}
@@ -326,26 +413,29 @@ def review(req: dict) -> dict:
         issues.append({
             "severity": it.get("severity") if it.get("severity") in order else "low",
             "field": path,
-            "where": it.get("where") or (fields[path][0] if path else "Whole CV"),
-            "problem": it.get("problem", ""),
-            "suggestion": it.get("suggestion", ""),
-            "replacement": (it.get("replacement") or "").strip() if path else "",
+            "where": rd.restore(it.get("where") or (fields[path][0] if path else "Whole CV")),
+            "problem": rd.restore(it.get("problem", "")),
+            "suggestion": rd.restore(it.get("suggestion", "")),
+            "replacement": rd.restore((it.get("replacement") or "").strip()) if path else "",
             "original": fields[path][1] if path else "",
         })
     issues.sort(key=lambda x: order[x["severity"]])
-    return {"summary": data.get("summary", ""), "score": data.get("score"),
-            "strengths": [s for s in data.get("strengths") or [] if isinstance(s, str)], "issues": issues}
+    return {"summary": rd.restore(data.get("summary", "")), "score": data.get("score"),
+            "strengths": [rd.restore(s) for s in data.get("strengths") or [] if isinstance(s, str)], "issues": issues}
 
 
 # ---------- proofreading ----------
 
 def proofread(req: dict) -> dict:
-    fields = {path: (label, text) for path, (label, text) in cv_fields(req.get("cv") or {}).items()
+    cv = req.get("cv") or {}
+    rd = Redactor.for_request(req)
+    fields = {path: (label, text) for path, (label, text) in cv_fields(cv).items()
               if isinstance(text, str) and text.strip() and not path.endswith(".link")}
     if not fields:
         return {"corrections": []}
-    lines = [f"[{path}] {label}: {json.dumps(text, ensure_ascii=False)}" for path, (label, text) in fields.items()]
-    prompt = "<fields>\n" + "\n".join(lines) + "\n</fields>\n\nProofread every field above."
+    shown = cv_fields(rd.obj(cv))
+    lines = [f"[{path}] {shown[path][0]}: {json.dumps(shown[path][1], ensure_ascii=False)}" for path in fields]
+    prompt = "<fields>\n" + "\n".join(lines) + "\n</fields>\n\nProofread every field above." + rd.note()
     data = _run(prompt, PROOFREAD_SYSTEM, PROOFREAD_SCHEMA, _pick_model(req, "proofread"), EFFORT["proofread"])
     if not isinstance(data, dict) or not isinstance(data.get("corrections"), list):
         raise AIError("Got an unexpected answer from the model. Please try again.")
@@ -353,12 +443,12 @@ def proofread(req: dict) -> dict:
     for c in data["corrections"]:
         if not isinstance(c, dict):
             continue
-        path, fixed = c.get("field"), (c.get("corrected") or "").strip()
+        path, fixed = c.get("field"), rd.restore((c.get("corrected") or "").strip())
         if path not in fields or path in seen or not fixed or fixed == fields[path][1].strip():
             continue  # unknown field, duplicate, or no actual change
         seen.add(path)
         out.append({"field": path, "where": fields[path][0], "original": fields[path][1],
-                    "replacement": fixed, "explanation": c.get("explanation", "")})
+                    "replacement": fixed, "explanation": rd.restore(c.get("explanation", ""))})
     order = list(fields)
     out.sort(key=lambda x: order.index(x["field"]))
     return {"corrections": out}

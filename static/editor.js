@@ -534,7 +534,7 @@
     if (req.mode === "bullets") aiNotes.set(req.notesKey, notes);
     const body = {
       mode: req.mode, cv, count: parseInt($("aiCount").value, 10), instructions: $("aiExtra").value.trim(),
-      model: $("aiModel").value,
+      model: $("aiModel").value, private: privacyOn(),
       entry: req.entry || null,
       text: req.mode === "improve" ? req.text : notes,
     };
@@ -756,7 +756,7 @@
     go.textContent = "Reviewing…";
     $("reviewOut").replaceChildren(h("div", { class: "aiStatus" }, "Claude is reading your CV… this usually takes 20–60 seconds."));
     try {
-      lastReview = await api("POST", "/api/ai/review", { cv, job, model: $("reviewModel").value, layout: layoutInfo });
+      lastReview = await api("POST", "/api/ai/review", { cv, job, model: $("reviewModel").value, layout: layoutInfo, private: privacyOn() });
       renderReview(lastReview);
     } catch (e) {
       $("reviewOut").replaceChildren(h("div", { class: "aiStatus error" }, e.message));
@@ -851,7 +851,7 @@
     $("proofAll").hidden = true;
     $("proofOut").replaceChildren(h("div", { class: "aiStatus" }, "Checking your CV… this usually takes 5–15 seconds."));
     try {
-      lastProof = await api("POST", "/api/ai/proofread", { cv, model: $("proofModel").value });
+      lastProof = await api("POST", "/api/ai/proofread", { cv, model: $("proofModel").value, private: privacyOn() });
       renderProof(lastProof);
     } catch (e) {
       $("proofOut").replaceChildren(h("div", { class: "aiStatus error" }, e.message));
@@ -902,6 +902,19 @@
     if (!saved) applyTheme(e.matches ? "dark" : "light", false);
   });
   applyTheme(currentTheme(), false);
+
+  // ---------- privacy: hide personal details from the AI (on by default) ----------
+  function privacyOn() {
+    try { return localStorage.getItem("cv-ai-private") !== "off"; } catch (e) { return true; }
+  }
+  const privacyBoxes = document.querySelectorAll("input.privacy");
+  privacyBoxes.forEach((cb) => {
+    cb.checked = privacyOn();
+    cb.addEventListener("change", () => {
+      try { localStorage.setItem("cv-ai-private", cb.checked ? "on" : "off"); } catch (e) { /* storage unavailable */ }
+      privacyBoxes.forEach((other) => { other.checked = cb.checked; });
+    });
+  });
 
   // ---------- wiring ----------
   $("undo").onclick = undo;

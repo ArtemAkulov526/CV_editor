@@ -61,6 +61,7 @@ You can choose a different model, Opus 5.5 included, in each dialog, and the edi
 - Everything runs locally. The server listens only on `127.0.0.1`, and it rejects requests from other websites.
 - Your CV (`data/cv.json`), `backups/` and `output/` are git-ignored, so your personal details are never committed.
 - CV text is sent to Claude only when you use an AI feature.
+- **Hide personal details** (on by default, in every AI dialog): before anything is sent, your name, email, phone numbers, handles and links are replaced with placeholders such as `[NAME]`, `[EMAIL-1]` or `[LINK-1: github.com]`. Your real details are put back in the answer, so fixes apply normally. Your employers, projects and skills are still sent, because the AI needs them to give useful feedback.
 
 ## Project structure
 

@@ -85,6 +85,7 @@
         <select id="aiCount"><option>3</option><option selected>4</option><option>5</option><option>6</option></select>
       </label>
       <label class="aiCount">Model <select id="aiModel" data-kind="write"></select></label>
+      <label class="aiCount privacyToggle" title="Your name, email, phone, handles and links are replaced with placeholders like [NAME] before anything is sent to the AI, and put back in the answer."><input type="checkbox" class="privacy" checked> Hide personal details</label>
       <input type="text" id="aiExtra" placeholder="Optional: extra wishes, e.g. “focus on backend”, “shorter”">
       <button type="button" class="primary" id="aiGo">Generate</button>
     </div>
@@ -108,6 +109,7 @@
   </details>
   <div class="aiRow">
     <label class="aiCount">Model <select id="reviewModel" data-kind="review"></select></label>
+    <label class="aiCount privacyToggle" title="Your name, email, phone, handles and links are replaced with placeholders like [NAME] before anything is sent to the AI, and put back in the answer."><input type="checkbox" class="privacy" checked> Hide personal details</label>
     <span class="hint" style="flex:1">Reads your whole CV, including unsaved changes. Takes about 20–60 seconds.</span>
     <button type="button" class="primary" id="reviewGo">Run review</button>
   </div>
@@ -121,6 +123,7 @@
   </div>
   <div class="aiRow">
     <label class="aiCount">Model <select id="proofModel" data-kind="proofread"></select></label>
+    <label class="aiCount privacyToggle" title="Your name, email, phone, handles and links are replaced with placeholders like [NAME] before anything is sent to the AI, and put back in the answer."><input type="checkbox" class="privacy" checked> Hide personal details</label>
     <span class="hint" style="flex:1">Checks every field, including unsaved changes. It fixes only real errors and doesn't rewrite your style.</span>
     <button type="button" id="proofAll" hidden>Apply all</button>
     <button type="button" class="primary" id="proofGo">Check</button>
