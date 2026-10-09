@@ -120,6 +120,9 @@ table.skills td.v { width: 100%; }
     box-shadow: 0 1px 3px rgba(0,0,0,.12), 0 8px 24px rgba(0,0,0,.08);
     padding-bottom: var(--m-bottom);
   }
+  /* Editor in dark mode: darken the area around the page; the page itself stays white. */
+  html[data-ui="dark"], html[data-ui="dark"] body { background: #111215; }
+  html[data-ui="dark"] .paper { box-shadow: 0 1px 3px rgba(0,0,0,.5), 0 10px 30px rgba(0,0,0,.45); }
   .pagebreak {
     position: absolute; left: 0; right: 0; height: 0;
     border-top: 1.5px dashed #d33;

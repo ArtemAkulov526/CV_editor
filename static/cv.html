@@ -48,6 +48,9 @@
   }
 
   window.addEventListener("message", (e) => {
+    if (e.source === window.parent && e.data && e.data.type === "ui-theme") {
+      document.documentElement.dataset.ui = e.data.theme;
+    }
     if (e.source === window.parent && e.data && e.data.type === "cv-data") {
       const scrollY = window.scrollY;
       draw(e.data.cv).then(() => window.scrollTo(0, scrollY));

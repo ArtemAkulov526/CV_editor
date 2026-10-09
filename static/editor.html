@@ -5,6 +5,15 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>CV Editor</title>
 <link rel="stylesheet" href="/static/editor.css">
+<script>
+  // Apply the saved (or system) theme before first paint to avoid a flash of the wrong theme.
+  (function () {
+    let t = null;
+    try { t = localStorage.getItem("cv-editor-theme"); } catch (e) { /* storage unavailable */ }
+    if (t !== "light" && t !== "dark") t = matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+    document.documentElement.dataset.theme = t;
+  })();
+</script>
 </head>
 <body>
 <header class="topbar">
@@ -12,6 +21,7 @@
   <div class="status" id="status">Loading…</div>
   <div class="pages" id="pages"></div>
   <div class="spacer"></div>
+  <button id="theme" title="Switch between light and dark mode" aria-label="Toggle dark mode">☾</button>
   <button id="undo" title="Undo (Ctrl+Z)">Undo</button>
   <button id="redo" title="Redo (Ctrl+Y)">Redo</button>
   <button id="proof" title="Check spelling and grammar in the whole CV">Check spelling</button>

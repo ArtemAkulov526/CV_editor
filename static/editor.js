@@ -371,7 +371,11 @@
 
   window.addEventListener("message", (e) => {
     if (e.source !== frame.contentWindow || !e.data) return;
-    if (e.data.type === "cv-preview-ready") { previewReady = true; if (cv) sendPreview(); }
+    if (e.data.type === "cv-preview-ready") {
+      previewReady = true;
+      frame.contentWindow.postMessage({ type: "ui-theme", theme: currentTheme() }, "*");
+      if (cv) sendPreview();
+    }
     if (e.data.type === "cv-measured") {
       layoutInfo = { pages: e.data.pages, freeFrac: e.data.freeFrac };
       if (e.data.docHeight && Math.abs(e.data.docHeight - docHeight) > 1) { docHeight = e.data.docHeight; applyZoom(); }
@@ -878,6 +882,26 @@
   $("proofGo").onclick = runProof;
   $("proofAll").onclick = applyAllProof;
   $("proofClose").onclick = () => $("proofDialog").close();
+
+  // ---------- light / dark mode (editor UI only) ----------
+  function currentTheme() { return document.documentElement.dataset.theme === "dark" ? "dark" : "light"; }
+
+  function applyTheme(theme, remember) {
+    document.documentElement.dataset.theme = theme;
+    $("theme").textContent = theme === "dark" ? "☀" : "☾";
+    $("theme").title = theme === "dark" ? "Switch to light mode" : "Switch to dark mode";
+    if (remember) { try { localStorage.setItem("cv-editor-theme", theme); } catch (e) { /* storage unavailable */ } }
+    if (frame.contentWindow) frame.contentWindow.postMessage({ type: "ui-theme", theme }, "*");
+  }
+
+  $("theme").onclick = () => applyTheme(currentTheme() === "dark" ? "light" : "dark", true);
+  // Until the user picks a theme, follow the system setting live.
+  matchMedia("(prefers-color-scheme: dark)").addEventListener("change", (e) => {
+    let saved = null;
+    try { saved = localStorage.getItem("cv-editor-theme"); } catch (err) { /* storage unavailable */ }
+    if (!saved) applyTheme(e.matches ? "dark" : "light", false);
+  });
+  applyTheme(currentTheme(), false);
 
   // ---------- wiring ----------
   $("undo").onclick = undo;
