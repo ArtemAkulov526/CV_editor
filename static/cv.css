@@ -1,0 +1,136 @@
+/* CV page styles — mirrors the original LaTeX layout (A4, Computer Modern). */
+@font-face { font-family: "CMU Serif"; font-style: normal; font-weight: 400; src: url("fonts/cmu-serif-500-roman.woff2") format("woff2"); }
+@font-face { font-family: "CMU Serif"; font-style: italic; font-weight: 400; src: url("fonts/cmu-serif-500-italic.woff2") format("woff2"); }
+@font-face { font-family: "CMU Serif"; font-style: normal; font-weight: 700; src: url("fonts/cmu-serif-700-roman.woff2") format("woff2"); }
+@font-face { font-family: "CMU Serif"; font-style: italic; font-weight: 700; src: url("fonts/cmu-serif-700-italic.woff2") format("woff2"); }
+@font-face { font-family: "CMU Serif Slanted"; font-style: normal; font-weight: 400; src: url("fonts/cmu-serif-extra-500-italic.woff2") format("woff2"); }
+
+@page { size: A4; margin: 40pt 0 40pt 0; }
+@page :first { margin-top: 0; }
+
+:root {
+  --fs: 9.96pt;
+  --gap: 1;
+  --page-w: 595.28pt;
+  --page-h: 841.89pt;
+  --m-top: 24.8pt;
+  --m-left: 43pt;
+  --m-right: 57.6pt;
+  --m-bottom: 40pt;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; background: #fff; }
+
+.sheet {
+  width: var(--page-w);
+  padding: var(--m-top) var(--m-right) 0 var(--m-left);
+  font-family: "CMU Serif", "Latin Modern Roman", Georgia, serif;
+  font-size: var(--fs);
+  line-height: 1.2;
+  color: #000;
+  font-kerning: normal;
+  text-rendering: geometricPrecision;
+  -webkit-font-smoothing: antialiased;
+}
+
+a { color: inherit; text-decoration: none; }
+b { font-weight: 700; }
+
+header { text-align: center; }
+h1 {
+  margin: 0;
+  font-weight: 400;
+  font-size: 2.49em;
+  line-height: 1;
+}
+.sc { font-size: 0.75em; }
+.contacts { margin-top: -0.06em; }
+.headline { font-size: 1.2em; margin-top: 0.1em; line-height: 1.2; }
+.headline + .contacts { margin-top: 0.15em; }
+.contacts .sep { padding: 0 0.05em; }
+
+/* Inline boxes in other fonts (bold, slanted) must not stretch the line height. */
+b, i, a, .tech, .sc { line-height: 0; }
+.nobr { white-space: nowrap; }
+
+.sec { margin-top: calc(0.56em * var(--gap)); }
+header + .sec { margin-top: calc(0.95em * var(--gap)); }
+header + .sec > h2 { margin-bottom: 0.56em; }
+h2 {
+  margin: 0 0 0.26em;
+  font-size: 1em;
+  font-weight: 400;
+  line-height: 1.2;
+  padding-bottom: 0.05em;
+  border-bottom: 0.4pt solid #000;
+  break-after: avoid;
+  page-break-after: avoid;
+}
+
+.entry { margin-left: 1.46em; }
+/* Long entries may break between bullets, but never right after the title/date lines. */
+.entry .row, .project .phead { break-after: avoid; page-break-after: avoid; }
+.project, .text p { break-inside: avoid; page-break-inside: avoid; }
+.entry + .entry { margin-top: calc(0.56em * var(--gap)); }
+.row { display: flex; justify-content: space-between; align-items: baseline; gap: 1em; }
+.row .r { white-space: nowrap; flex-shrink: 0; }
+.row.sub.italic .l { font-style: italic; }
+
+.tech { font-family: "CMU Serif Slanted", "CMU Serif", serif; }
+.text p { margin: 0; }
+.text p + p { margin-top: calc(0.5em * var(--gap)); }
+
+ul.bullets {
+  margin: calc(0.7em * var(--gap)) 0 0;
+  padding: 0 0 calc(0.46em * var(--gap)) 2.5em;
+  list-style: none;
+}
+.desc + ul.bullets { margin-top: calc(0.2em * var(--gap)); }
+ul.bullets li { break-inside: avoid; }
+ul.bullets li + li { margin-top: calc(0.49em * var(--gap)); }
+ul.bullets li::before {
+  content: "•";
+  display: inline-block;
+  width: 1em;
+  margin-left: -1em;
+}
+
+table.skills {
+  margin-left: 2.07em;
+  margin-top: -0.27em;
+  border-collapse: collapse;
+}
+table.skills tr { break-inside: avoid; page-break-inside: avoid; }
+table.skills td { padding: 0; vertical-align: top; }
+table.skills { width: calc(100% - 2.07em); }
+table.skills td.k { padding-right: 1em; min-width: 13.7em; }
+table.skills td.v { width: 100%; }
+
+/* Screen preview: show the page as a sheet of paper with page-break guides. */
+@media screen {
+  html, body { background: #e9e9ec; }
+  body { padding: 24px 0 48px; }
+  .paper {
+    position: relative;
+    width: var(--page-w);
+    min-height: var(--page-h);
+    margin: 0 auto;
+    background: #fff;
+    box-shadow: 0 1px 3px rgba(0,0,0,.12), 0 8px 24px rgba(0,0,0,.08);
+    padding-bottom: var(--m-bottom);
+  }
+  .pagebreak {
+    position: absolute; left: 0; right: 0; height: 0;
+    border-top: 1.5px dashed #d33;
+    pointer-events: none;
+  }
+  .pagebreak span {
+    position: absolute; right: 6px; top: 2px;
+    font: 11px/1 system-ui, sans-serif; color: #d33;
+  }
+}
+@media print {
+  .pagebreak { display: none; }
+  .paper { min-height: 0 !important; }
+}

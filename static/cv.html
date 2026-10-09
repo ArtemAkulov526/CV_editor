@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>CV</title>
+<link rel="stylesheet" href="cv.css">
+<script src="render.js"></script>
+</head>
+<body>
+<div class="paper"><div class="sheet" id="sheet"></div></div>
+<script>
+  const PT = 4 / 3; // CSS px per pt
+  const sheet = document.getElementById("sheet");
+  const paper = sheet.parentElement;
+
+  function draw(cv) {
+    const out = renderCV(cv);
+    for (const [k, v] of Object.entries(out.vars)) document.documentElement.style.setProperty(k, v);
+    sheet.innerHTML = out.html;
+    document.title = cv.name ? `${cv.name.trim()} – CV` : "CV";
+    return document.fonts.ready.then(measure);
+  }
+
+  // Estimate page breaks the same way the PDF is paginated (@page margins in cv.css).
+  function measure() {
+    paper.querySelectorAll(".pagebreak").forEach((e) => e.remove());
+    const pageH = 841.89 * PT, margin = 40 * PT;
+    const contentH = sheet.getBoundingClientRect().height;
+    let pages = 1, y = pageH - margin;
+    while (contentH > y + 1) {
+      const line = document.createElement("div");
+      line.className = "pagebreak";
+      line.style.top = y + "px";
+      line.innerHTML = `<span>page ${pages + 1} starts here</span>`;
+      paper.appendChild(line);
+      pages++;
+      y += pageH - 2 * margin;
+    }
+    paper.style.minHeight = Math.max(pageH, contentH + margin) + "px";
+    const usable = pageH - 2 * margin;
+    const freeFrac = (y - contentH) / (pages === 1 ? pageH - margin : usable);
+    window.__cvPages = pages;
+    window.__cvReady = true;
+    if (window.parent !== window) {
+      const docHeight = document.documentElement.scrollHeight;
+      window.parent.postMessage({ type: "cv-measured", pages, freeFrac, docHeight }, "*");
+    }
+  }
+
+  window.addEventListener("message", (e) => {
+    if (e.source === window.parent && e.data && e.data.type === "cv-data") {
+      const scrollY = window.scrollY;
+      draw(e.data.cv).then(() => window.scrollTo(0, scrollY));
+    }
+  });
+
+  if (window.parent !== window) {
+    window.parent.postMessage({ type: "cv-preview-ready" }, "*");
+  } else {
+    fetch("/api/cv").then((r) => r.json()).then(draw);
+  }
+</script>
+</body>
+</html>

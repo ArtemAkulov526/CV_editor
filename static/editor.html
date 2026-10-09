@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CV Editor</title>
+<link rel="stylesheet" href="/static/editor.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">CV Editor</div>
+  <div class="status" id="status">Loading…</div>
+  <div class="pages" id="pages"></div>
+  <div class="spacer"></div>
+  <button id="undo" title="Undo (Ctrl+Z)">Undo</button>
+  <button id="redo" title="Redo (Ctrl+Y)">Redo</button>
+  <button id="review" class="aiTop" title="Get feedback on the whole CV from AI">✨ Review CV</button>
+  <button id="history" title="Restore an earlier saved version">History</button>
+  <button id="save" title="Save (Ctrl+S)">Save</button>
+  <button id="export" class="primary" title="Save and export PDF (Ctrl+E)">Export PDF</button>
+</header>
+
+<main>
+  <aside class="form" id="form"></aside>
+  <section class="preview">
+    <div class="zoom">
+      <button id="zoomOut" title="Zoom out">−</button>
+      <span id="zoomLabel">100%</span>
+      <button id="zoomIn" title="Zoom in">+</button>
+      <button id="zoomFit" title="Fit width">Fit</button>
+    </div>
+    <div class="frameWrap" id="frameWrap">
+      <div class="frameSizer"><iframe id="frame" src="/static/cv.html" title="CV preview" scrolling="no"></iframe></div>
+    </div>
+  </section>
+</main>
+
+<dialog id="historyDialog">
+  <form method="dialog">
+    <h3>Saved versions</h3>
+    <p class="hint">Every save keeps the previous version. Pick one to load it into the editor (nothing is overwritten until you save).</p>
+    <ul id="historyList"></ul>
+    <div class="dialogButtons"><button value="cancel">Close</button></div>
+  </form>
+</dialog>
+
+<dialog id="aiDialog" class="aiDialog">
+  <div class="aiHead">
+    <h3 id="aiTitle">AI assistant</h3>
+    <button type="button" class="icon" id="aiClose" title="Close">✕</button>
+  </div>
+
+  <div id="aiKeyBox" class="aiKeyBox" hidden>
+    <p class="hint" id="aiKeyIntro"></p>
+    <p class="hint">An <b>Anthropic API key</b> is optional. If you add one, the editor uses it instead of Claude Code.
+      Get one at <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">console.anthropic.com</a>.
+      API usage is billed separately from a Claude subscription. The key stays on this computer, in your user folder.</p>
+    <div class="aiRow">
+      <input type="password" id="aiKey" placeholder="sk-ant-…" autocomplete="off">
+      <button type="button" class="primary" id="aiKeySave">Save key</button>
+      <button type="button" id="aiKeyRemove" hidden>Remove key</button>
+      <button type="button" id="aiKeyBack">Back</button>
+    </div>
+  </div>
+
+  <div id="aiMain">
+    <p class="aiContext" id="aiContext"></p>
+    <label class="field" id="aiNotesField">
+      <span id="aiNotesLabel">What did you do? Rough notes in any language are fine.</span>
+      <textarea id="aiNotes" rows="4"></textarea>
+    </label>
+    <div class="aiRow">
+      <label class="aiCount" id="aiCountField">How many
+        <select id="aiCount"><option>3</option><option selected>4</option><option>5</option><option>6</option></select>
+      </label>
+      <label class="aiCount">Model <select id="aiModel" data-kind="write"></select></label>
+      <input type="text" id="aiExtra" placeholder="Optional: extra wishes, e.g. “focus on backend”, “shorter”">
+      <button type="button" class="primary" id="aiGo">Generate</button>
+    </div>
+    <div id="aiResults" class="aiResults"></div>
+    <div class="aiFoot">
+      <span class="hint" id="aiFootHint">Check the suggestions before using them. The AI is told not to invent facts, but it can still make mistakes.</span>
+      <button type="button" class="primary" id="aiApply" hidden>Add selected</button>
+    </div>
+    <p class="hint aiKeyLink"><span id="aiBackend"></span> · <a href="#" id="aiChangeKey">AI settings</a></p>
+  </div>
+</dialog>
+
+<dialog id="reviewDialog" class="aiDialog reviewDialog">
+  <div class="aiHead">
+    <h3>✨ CV review</h3>
+    <button type="button" class="icon" id="reviewClose" title="Close">✕</button>
+  </div>
+  <details id="reviewJobBox">
+    <summary>Tailor the review to a job posting (optional)</summary>
+    <textarea id="reviewJob" rows="5" placeholder="Paste the vacancy text here. The review then checks how well your CV fits it."></textarea>
+  </details>
+  <div class="aiRow">
+    <label class="aiCount">Model <select id="reviewModel" data-kind="review"></select></label>
+    <span class="hint" style="flex:1">Reads your whole CV, including unsaved changes. Takes about 20–60 seconds.</span>
+    <button type="button" class="primary" id="reviewGo">Run review</button>
+  </div>
+  <div id="reviewOut" class="reviewOut"></div>
+</dialog>
+
+<div class="toast" id="toast" hidden></div>
+
+<script src="/static/editor.js"></script>
+</body>
+</html>

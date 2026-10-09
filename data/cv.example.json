@@ -1,0 +1,79 @@
+{
+  "fileName": "Alex_Morgan_CV",
+  "name": "Alex Morgan",
+  "headline": "Python Backend Developer",
+  "contacts": [
+    "Berlin, Germany",
+    "alex.morgan@example.com",
+    "[github.com/alexmorgan](https://github.com/alexmorgan)"
+  ],
+  "sections": [
+    {
+      "title": "Experience",
+      "type": "entries",
+      "italicSubtitle": true,
+      "items": [
+        {
+          "title": "Example Tech GmbH",
+          "titleRight": "Remote",
+          "subtitle": "Python Developer",
+          "subtitleRight": "March 2025 - present",
+          "bullets": [
+            "Build REST APIs with FastAPI and PostgreSQL for an internal order management system.",
+            "Write unit and integration tests with pytest and run them in GitHub Actions.",
+            "Package services with Docker and docker-compose for consistent local development."
+          ]
+        },
+        {
+          "title": "Sample Software",
+          "titleRight": "Berlin",
+          "subtitle": "Software Engineering Intern",
+          "subtitleRight": "June 2024 - August 2024",
+          "bullets": [
+            "Developed Django admin tools that replaced manual spreadsheet updates.",
+            "Fixed bugs and reviewed pull requests together with senior developers."
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Skills",
+      "type": "skills",
+      "items": [
+        { "label": "Languages:", "value": "Python, SQL, JavaScript" },
+        { "label": "Frameworks:", "value": "FastAPI, Django, Flask" },
+        { "label": "Data & storage:", "value": "PostgreSQL, SQLAlchemy, Redis" },
+        { "label": "Tools:", "value": "Git, Docker, pytest, Linux" },
+        { "label": "Spoken languages:", "value": "English - C1, German - B1" }
+      ]
+    },
+    {
+      "title": "Projects",
+      "type": "projects",
+      "items": [
+        {
+          "name": "Price Tracker",
+          "tech": "Python, asyncio, aiohttp, PostgreSQL",
+          "link": "https://github.com/alexmorgan/price-tracker",
+          "description": "Asynchronous scraper that tracks product prices across several shops and sends alerts when a price drops.",
+          "bullets": []
+        }
+      ]
+    },
+    {
+      "title": "Education",
+      "type": "entries",
+      "italicSubtitle": false,
+      "items": [
+        {
+          "title": "Example University of Applied Sciences",
+          "titleRight": "",
+          "subtitle": "Bachelor's Degree in Computer Science",
+          "subtitleRight": "September 2020 - June 2024",
+          "bullets": []
+        }
+      ]
+    }
+  ],
+  "style": {}
+}

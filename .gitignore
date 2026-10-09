@@ -1,0 +1,11 @@
+# Personal CV data stays on this computer
+data/cv.json
+backups/
+output/
+
+# Python / editors
+__pycache__/
+*.pyc
+*.tmp
+.idea/
+.vscode/
