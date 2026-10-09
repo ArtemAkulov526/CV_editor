@@ -14,6 +14,7 @@
   <div class="spacer"></div>
   <button id="undo" title="Undo (Ctrl+Z)">Undo</button>
   <button id="redo" title="Redo (Ctrl+Y)">Redo</button>
+  <button id="proof" title="Check spelling and grammar in the whole CV">Check spelling</button>
   <button id="review" class="aiTop" title="Get feedback on the whole CV from AI">✨ Review CV</button>
   <button id="history" title="Restore an earlier saved version">History</button>
   <button id="save" title="Save (Ctrl+S)">Save</button>
@@ -21,7 +22,7 @@
 </header>
 
 <main>
-  <aside class="form" id="form"></aside>
+  <aside class="form" id="form" lang="en" spellcheck="true"></aside>
   <section class="preview">
     <div class="zoom">
       <button id="zoomOut" title="Zoom out">−</button>
@@ -101,6 +102,20 @@
     <button type="button" class="primary" id="reviewGo">Run review</button>
   </div>
   <div id="reviewOut" class="reviewOut"></div>
+</dialog>
+
+<dialog id="proofDialog" class="aiDialog proofDialog">
+  <div class="aiHead">
+    <h3>Spelling &amp; grammar</h3>
+    <button type="button" class="icon" id="proofClose" title="Close">✕</button>
+  </div>
+  <div class="aiRow">
+    <label class="aiCount">Model <select id="proofModel" data-kind="proofread"></select></label>
+    <span class="hint" style="flex:1">Checks every field, including unsaved changes. It fixes only real errors and doesn't rewrite your style.</span>
+    <button type="button" id="proofAll" hidden>Apply all</button>
+    <button type="button" class="primary" id="proofGo">Check</button>
+  </div>
+  <div id="proofOut" class="reviewOut"></div>
 </dialog>
 
 <div class="toast" id="toast" hidden></div>

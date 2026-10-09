@@ -618,7 +618,7 @@
   }
 
   function aiFillModels(st) {
-    for (const sel of [$("aiModel"), $("reviewModel")]) {
+    for (const sel of [$("aiModel"), $("reviewModel"), $("proofModel")]) {
       const kind = sel.dataset.kind;
       const def = st.defaults[kind];
       const want = storedModel(kind);
@@ -627,7 +627,7 @@
       sel.value = want && st.models[want] ? want : def;
     }
   }
-  for (const sel of [$("aiModel"), $("reviewModel")]) {
+  for (const sel of [$("aiModel"), $("reviewModel"), $("proofModel")]) {
     sel.addEventListener("change", () => {
       try { localStorage.setItem("cv-ai-model-" + sel.dataset.kind, sel.value); } catch (e) { /* storage unavailable */ }
     });
@@ -660,7 +660,7 @@
   }
 
   function showField(path) {
-    $("reviewDialog").close();
+    document.querySelectorAll("dialog[open]").forEach((d) => d.close());
     const m = /^s(\d+)/.exec(path);
     if (m && cv.sections[+m[1]]) collapsed.delete(cv.sections[+m[1]]);
     renderForm(path, "end");
@@ -765,6 +765,119 @@
   $("review").onclick = openReview;
   $("reviewGo").onclick = runReview;
   $("reviewClose").onclick = () => $("reviewDialog").close();
+
+  // ---------- spelling & grammar ----------
+  let lastProof = null;
+
+  // Word-level diff of two strings -> [["=" | "-" | "+", text], ...]
+  function wordDiff(a, b) {
+    const A = a.split(/(\s+)/), B = b.split(/(\s+)/);
+    const n = A.length, m = B.length;
+    const L = Array.from({ length: n + 1 }, () => new Uint16Array(m + 1));
+    for (let i = n - 1; i >= 0; i--) {
+      for (let j = m - 1; j >= 0; j--) L[i][j] = A[i] === B[j] ? L[i + 1][j + 1] + 1 : Math.max(L[i + 1][j], L[i][j + 1]);
+    }
+    const out = [];
+    const push = (t, x) => { if (out.length && out[out.length - 1][0] === t) out[out.length - 1][1] += x; else out.push([t, x]); };
+    let i = 0, j = 0;
+    while (i < n && j < m) {
+      if (A[i] === B[j]) { push("=", A[i]); i++; j++; }
+      else if (L[i + 1][j] >= L[i][j + 1]) push("-", A[i++]);
+      else push("+", B[j++]);
+    }
+    while (i < n) push("-", A[i++]);
+    while (j < m) push("+", B[j++]);
+    return out;
+  }
+
+  function fieldValue(path) {
+    const t = resolvePath(path);
+    return t ? String(t[0][t[1]] ?? "") : null;
+  }
+
+  function renderProof(r) {
+    const out = $("proofOut");
+    $("proofAll").hidden = true;
+    if (!r) { out.replaceChildren(); return; }
+    if (!r.corrections.length) {
+      out.replaceChildren(h("div", { class: "proofOk" }, "✓ No spelling or grammar errors found."));
+      return;
+    }
+    let pending = 0;
+    const cards = r.corrections.map((c) => {
+      const applied = fieldValue(c.field) === c.replacement;
+      if (!applied) pending++;
+      const diff = h("div", { class: "fixText" }, wordDiff(c.original, c.replacement).map(([t, x]) =>
+        t === "=" ? x : h(t === "-" ? "del" : "ins", {}, x)));
+      return h("div", { class: "fix" + (applied ? " done" : "") },
+        h("div", { class: "issueHead" },
+          h("span", { class: "issueWhere" }, c.where),
+          h("button", { type: "button", class: "icon", title: "Go to this field in the editor", onclick: () => showField(c.field) }, "Show"),
+          h("button", { type: "button", class: "primary", disabled: applied, onclick: () => {
+            if (applyFix(c, c.replacement)) { renderProof(lastProof); toast("Fixed. Undo reverts it."); }
+          } }, applied ? "Applied ✓" : "Apply")),
+        diff,
+        c.explanation ? h("p", { class: "fixWhy" }, c.explanation) : null);
+    });
+    out.replaceChildren(h("div", { class: "reviewH" }, `${r.corrections.length} field${r.corrections.length > 1 ? "s" : ""} to fix`), ...cards);
+    $("proofAll").hidden = pending < 2;
+  }
+
+  // Apply every fix whose field is unchanged since the check, as one undo step.
+  function applyAllProof() {
+    let done = 0, skipped = 0;
+    for (const c of lastProof.corrections) {
+      const t = resolvePath(c.field);
+      if (!t) { skipped++; continue; }
+      const cur = String(t[0][t[1]] ?? "");
+      if (cur === c.replacement) continue;
+      if (cur !== c.original) { skipped++; continue; }
+      t[0][t[1]] = c.replacement;
+      done++;
+    }
+    if (done) changed(true);
+    renderProof(lastProof);
+    toast(`Applied ${done} fix${done === 1 ? "" : "es"}` + (skipped ? `. Skipped ${skipped} field(s) you changed since the check.` : ". Undo reverts them all."));
+  }
+
+  async function runProof() {
+    const go = $("proofGo");
+    go.disabled = true;
+    go.textContent = "Checking…";
+    $("proofAll").hidden = true;
+    $("proofOut").replaceChildren(h("div", { class: "aiStatus" }, "Checking your CV… this usually takes 5–15 seconds."));
+    try {
+      lastProof = await api("POST", "/api/ai/proofread", { cv, model: $("proofModel").value });
+      renderProof(lastProof);
+    } catch (e) {
+      $("proofOut").replaceChildren(h("div", { class: "aiStatus error" }, e.message));
+    } finally {
+      go.disabled = false;
+      go.textContent = "Check again";
+    }
+  }
+
+  async function openProof() {
+    renderProof(lastProof);
+    $("proofGo").textContent = lastProof ? "Check again" : "Check";
+    $("proofDialog").showModal();
+    try {
+      const st = await aiRefreshStatus();
+      if (!st.configured) {
+        $("proofOut").replaceChildren(h("div", { class: "aiStatus error" },
+          "The AI can't reach Claude. Install Claude Code and sign in (run `claude` in a terminal), or add an API key in a ✨ dialog → AI settings."));
+      } else if (!lastProof) {
+        runProof();
+      }
+    } catch (e) {
+      $("proofOut").replaceChildren(h("div", { class: "aiStatus error" }, "Could not reach the editor server: " + e.message));
+    }
+  }
+
+  $("proof").onclick = openProof;
+  $("proofGo").onclick = runProof;
+  $("proofAll").onclick = applyAllProof;
+  $("proofClose").onclick = () => $("proofDialog").close();
 
   // ---------- wiring ----------
   $("undo").onclick = undo;

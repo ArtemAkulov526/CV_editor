@@ -11,6 +11,7 @@ A local editor for a one-page CV in the classic LaTeX résumé style. You edit y
 - **Structured editing:** sections, jobs, projects, skills and bullet points can be added, reordered, duplicated or hidden.
 - **Fit indicator** that shows whether the CV still fits on one page and how much space is left. Font size and spacing are adjustable.
 - **Undo/redo**, plus **version history**: every save keeps the previous version, and any of them can be restored.
+- **Spell check:** the browser underlines misspellings as you type (English dictionary). **Check spelling** proofreads the whole CV: spelling, grammar and tech-name capitalisation (e.g. "Postgresql" → "PostgreSQL"). Each fix shows a word-by-word diff and can be applied individually, or all at once with **Apply all**.
 - **AI helper (✨)**, optional:
   - Turns rough notes, in any language, into CV bullet points.
   - Suggests better wording for a bullet point and suggests headlines.
@@ -49,6 +50,7 @@ You can use an Anthropic API key instead. Paste it under **AI settings** in any 
 | Task | Default model | Why |
 |---|---|---|
 | Writing bullets and headlines | Claude Haiku 5.5, low effort | Short rewrites; fast and light on usage |
+| Spelling & grammar | Claude Haiku 5.5, medium effort | Catches typos and grammar without rewriting your style |
 | CV review | Claude Sonnet 5.5, medium effort | Needs judgment across the whole CV |
 
 You can choose a different model, Opus 5.5 included, in each dialog, and the editor remembers the choice. The prompts tell the model to use only facts you provided and never invent numbers or results. Still, check everything it writes.

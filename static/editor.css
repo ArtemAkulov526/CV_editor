@@ -206,3 +206,13 @@ dialog.reviewDialog { width: min(820px, 96vw); max-height: 92vh; }
 .issueBtns { display: flex; gap: 6px; }
 
 .flash { outline: 3px solid #f5c542 !important; outline-offset: 1px; transition: outline-color .3s; }
+
+/* Spelling & grammar */
+dialog.proofDialog { width: min(760px, 96vw); max-height: 92vh; }
+.fix { border: 1px solid var(--border); border-radius: 6px; padding: 9px 12px; margin-bottom: 8px; background: #fff; }
+.fix.done { opacity: .55; }
+.fixText { font-size: 13.5px; line-height: 1.55; margin: 4px 0; }
+.fixText del { background: #fde2df; color: #9b2c1f; text-decoration: line-through; border-radius: 2px; padding: 0 1px; }
+.fixText ins { background: #dcf3e3; color: #14663a; text-decoration: none; border-radius: 2px; padding: 0 1px; font-weight: 600; }
+.fixWhy { font-size: 12.5px; color: var(--muted); margin: 0; }
+.proofOk { font-size: 14px; color: var(--ok); padding: 10px 0; }

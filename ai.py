@@ -24,8 +24,8 @@ MODELS = {
 }
 # Short rewrites are easy: the small model writes them well and uses far less of your plan.
 # Reviewing a whole CV takes judgment, so it defaults to the mid-size model.
-DEFAULT_MODELS = {"write": "claude-haiku-5-5", "review": "claude-sonnet-5-5"}
-EFFORT = {"write": "low", "review": "medium"}
+DEFAULT_MODELS = {"write": "claude-haiku-5-5", "review": "claude-sonnet-5-5", "proofread": "claude-haiku-5-5"}
+EFFORT = {"write": "low", "review": "medium", "proofread": "medium"}
 
 STYLE_RULES = """- Use only facts the user gave you (in the notes or the CV). Never invent employers, tools, \
 numbers, percentages, team sizes or results. If a metric would help but none was given, leave it out.
@@ -111,6 +111,46 @@ REVIEW_SCHEMA = {
         },
     },
     "required": ["summary", "score", "strengths", "issues"],
+    "additionalProperties": False,
+}
+
+
+PROOFREAD_SYSTEM = """You are a careful proofreader of a CV written by a non-native English speaker \
+(or in the CV's own language, if it is not English).
+
+Find only real errors:
+- spelling mistakes and typos
+- grammar errors (articles, verb forms, prepositions, agreement)
+- wrong capitalisation or spelling of technology and product names (for example "Postgresql" -> \
+"PostgreSQL", "Javascript" -> "JavaScript", "fast api" -> "FastAPI", "Github" -> "GitHub")
+- obvious punctuation errors, such as double spaces, a missing space after a comma, or unbalanced brackets
+
+Do not change style, wording, tone or content, do not shorten text, and do not "improve" correct \
+sentences. Leave correct technical terms, names, URLs and email addresses alone. British and \
+American spelling are both fine. Make the smallest edit that fixes each error.
+
+For every field that has at least one error, return one correction: the field id from the \
+<fields> list, the full corrected text of that field, and a short explanation of what was \
+wrong. Return an empty list when there is nothing to fix."""
+
+PROOFREAD_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "corrections": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "field": {"type": "string"},
+                    "corrected": {"type": "string"},
+                    "explanation": {"type": "string"},
+                },
+                "required": ["field", "corrected", "explanation"],
+                "additionalProperties": False,
+            },
+        },
+    },
+    "required": ["corrections"],
     "additionalProperties": False,
 }
 
@@ -294,6 +334,33 @@ def review(req: dict) -> dict:
     issues.sort(key=lambda x: order[x["severity"]])
     return {"summary": data.get("summary", ""), "score": data.get("score"),
             "strengths": [s for s in data.get("strengths") or [] if isinstance(s, str)], "issues": issues}
+
+
+# ---------- proofreading ----------
+
+def proofread(req: dict) -> dict:
+    fields = {path: (label, text) for path, (label, text) in cv_fields(req.get("cv") or {}).items()
+              if isinstance(text, str) and text.strip() and not path.endswith(".link")}
+    if not fields:
+        return {"corrections": []}
+    lines = [f"[{path}] {label}: {json.dumps(text, ensure_ascii=False)}" for path, (label, text) in fields.items()]
+    prompt = "<fields>\n" + "\n".join(lines) + "\n</fields>\n\nProofread every field above."
+    data = _run(prompt, PROOFREAD_SYSTEM, PROOFREAD_SCHEMA, _pick_model(req, "proofread"), EFFORT["proofread"])
+    if not isinstance(data, dict) or not isinstance(data.get("corrections"), list):
+        raise AIError("Got an unexpected answer from the model. Please try again.")
+    out, seen = [], set()
+    for c in data["corrections"]:
+        if not isinstance(c, dict):
+            continue
+        path, fixed = c.get("field"), (c.get("corrected") or "").strip()
+        if path not in fields or path in seen or not fixed or fixed == fields[path][1].strip():
+            continue  # unknown field, duplicate, or no actual change
+        seen.add(path)
+        out.append({"field": path, "where": fields[path][0], "original": fields[path][1],
+                    "replacement": fixed, "explanation": c.get("explanation", "")})
+    order = list(fields)
+    out.sort(key=lambda x: order.index(x["field"]))
+    return {"corrections": out}
 
 
 # ---------- backends ----------

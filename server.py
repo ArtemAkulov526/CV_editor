@@ -166,6 +166,13 @@ class Handler(SimpleHTTPRequestHandler):
             except ai.AIError as e:
                 return self._json(400, {"error": str(e)})
             return self._json(200, ai.status())
+        if self.path == "/api/ai/proofread":
+            try:
+                return self._json(200, ai.proofread(self._read_json() or {}))
+            except ai.AIError as e:
+                return self._json(400, {"error": str(e)})
+            except Exception as e:  # unexpected failure: still report it to the editor
+                return self._json(500, {"error": f"Spell check failed: {e}"})
         if self.path == "/api/ai/review":
             try:
                 return self._json(200, ai.review(self._read_json() or {}))
