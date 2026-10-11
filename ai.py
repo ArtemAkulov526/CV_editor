@@ -16,6 +16,9 @@ from datetime import date
 from pathlib import Path
 
 KEY_FILE = Path.home() / ".cv_editor" / "anthropic_key"
+# Claude Code runs from this empty folder, so no CLAUDE.md, project memory or project settings
+# from elsewhere get mixed into CV requests.
+CLAUDE_RUN_DIR = Path.home() / ".cv_editor" / "claude-run"
 CLAUDE_CODE_TIMEOUT = 300  # seconds
 
 MODELS = {
@@ -279,8 +282,6 @@ def _pick_model(req: dict, kind: str) -> str:
     return model
 
 
-# ---------- writing suggestions ----------
-
 # ---------- privacy: hide personal details from the AI ----------
 
 EMAIL_RE = re.compile(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+")
@@ -360,6 +361,8 @@ class Redactor:
     def note(self) -> str:
         return "\n\n" + PRIVACY_NOTE if self.enabled else ""
 
+
+# ---------- writing suggestions ----------
 
 def _cv_as_text(cv: dict) -> str:
     """Compact JSON of the CV content, without editor-only settings."""
@@ -510,6 +513,8 @@ def review(req: dict) -> dict:
         for d in it.get("delete") or []:
             if path and d in fields and re.search(r"\.b\.\d+$", d) and d not in delete:
                 delete.append(d)
+        if (it.get("replacement") or "").strip() and path in delete:
+            delete.remove(path)  # a merge keeps its target bullet; never throw the merged text away
         # A proposed new paragraph section (e.g. Summary). "beforeTitle" lets the editor find the
         # right place even if sections move before the suggestion is applied.
         new_section = None
@@ -588,12 +593,17 @@ def _via_claude_code(prompt: str, system: str, schema: dict, model: str, effort:
         "--effort", effort,
         "--tools", "",
         "--strict-mcp-config",
+        # Skip the user's personal settings (hooks, plugins, permissions); login still works.
+        "--setting-sources", "project",
         "--no-session-persistence",
     ]
+    if not cmd[0]:
+        raise AIError("Claude Code was not found. Install it, or add an API key in AI settings.")
     try:
+        CLAUDE_RUN_DIR.mkdir(parents=True, exist_ok=True)
         proc = subprocess.run(
             cmd, input=prompt, capture_output=True, text=True, encoding="utf-8", errors="replace",
-            timeout=CLAUDE_CODE_TIMEOUT, cwd=str(Path.home()),
+            timeout=CLAUDE_CODE_TIMEOUT, cwd=str(CLAUDE_RUN_DIR),
             creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
         )
     except subprocess.TimeoutExpired:

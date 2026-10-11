@@ -60,7 +60,8 @@ You can choose a different model, Opus 5.5 included, in each dialog, and the edi
 
 ## Privacy
 
-- Everything runs locally. The server listens only on `127.0.0.1`, and it rejects requests from other websites.
+- Everything runs locally. The server listens only on `127.0.0.1`, rejects requests from other websites, can't be embedded in another site, and serves only the editor's own files and your exported PDFs.
+- Claude Code is run from an empty folder (`~/.cv_editor/claude-run`) without your personal Claude Code settings, so your own CLAUDE.md, memory or hooks never mix into CV requests.
 - Your CV (`data/cv.json`), `backups/` and `output/` are git-ignored, so your personal details are never committed.
 - CV text is sent to Claude only when you use an AI feature.
 - **Hide personal details** (on by default, in every AI dialog): before anything is sent, your name, email, phone numbers, handles and links are replaced with placeholders such as `[NAME]`, `[EMAIL-1]` or `[LINK-1: github.com]`. Your real details are put back in the answer, so fixes apply normally. Your employers, projects and skills are still sent, because the AI needs them to give useful feedback.

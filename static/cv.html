@@ -43,22 +43,32 @@
     window.__cvReady = true;
     if (window.parent !== window) {
       const docHeight = document.documentElement.scrollHeight;
-      window.parent.postMessage({ type: "cv-measured", pages, freeFrac, docHeight }, "*");
+      window.parent.postMessage({ type: "cv-measured", pages, freeFrac, docHeight }, location.origin);
     }
   }
 
+  // Links in the preview open in a new tab, so the preview never turns into another website.
+  document.addEventListener("click", (e) => {
+    const a = e.target.closest && e.target.closest("a[href]");
+    if (a && window.parent !== window) {
+      e.preventDefault();
+      window.open(a.href, "_blank", "noopener,noreferrer");
+    }
+  });
+
   window.addEventListener("message", (e) => {
-    if (e.source === window.parent && e.data && e.data.type === "ui-theme") {
+    if (e.source !== window.parent || e.origin !== location.origin) return; // only the editor itself
+    if (e.data && e.data.type === "ui-theme") {
       document.documentElement.dataset.ui = e.data.theme;
     }
-    if (e.source === window.parent && e.data && e.data.type === "cv-data") {
+    if (e.data && e.data.type === "cv-data") {
       const scrollY = window.scrollY;
       draw(e.data.cv).then(() => window.scrollTo(0, scrollY));
     }
   });
 
   if (window.parent !== window) {
-    window.parent.postMessage({ type: "cv-preview-ready" }, "*");
+    window.parent.postMessage({ type: "cv-preview-ready" }, location.origin);
   } else {
     fetch("/api/cv").then((r) => r.json()).then(draw);
   }

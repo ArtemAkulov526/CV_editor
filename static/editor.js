@@ -357,7 +357,7 @@
     previewQueued = true;
     requestAnimationFrame(() => {
       previewQueued = false;
-      frame.contentWindow.postMessage({ type: "cv-data", cv }, "*");
+      frame.contentWindow.postMessage({ type: "cv-data", cv }, location.origin);
     });
   }
 
@@ -380,10 +380,11 @@
   }
 
   window.addEventListener("message", (e) => {
-    if (e.source !== frame.contentWindow || !e.data) return;
+    // Only trust our own preview page (not a website the preview frame was navigated to).
+    if (e.source !== frame.contentWindow || e.origin !== location.origin || !e.data) return;
     if (e.data.type === "cv-preview-ready") {
       previewReady = true;
-      frame.contentWindow.postMessage({ type: "ui-theme", theme: currentTheme() }, "*");
+      frame.contentWindow.postMessage({ type: "ui-theme", theme: currentTheme() }, location.origin);
       if (cv) sendPreview();
     }
     if (e.data.type === "cv-measured") {
@@ -436,6 +437,7 @@
 
   async function exportPdf() {
     const btn = $("export");
+    if (btn.disabled) return; // already exporting (e.g. Ctrl+E pressed twice)
     btn.disabled = true;
     btn.textContent = "Exporting…";
     try {
@@ -1027,11 +1029,6 @@
     return out;
   }
 
-  function fieldValue(path) {
-    const t = resolvePath(path);
-    return t ? String(t[0][t[1]] ?? "") : null;
-  }
-
   function renderProof(r) {
     const out = $("proofOut");
     $("proofAll").hidden = true;
@@ -1042,7 +1039,7 @@
     }
     let pending = 0;
     const cards = r.corrections.map((c) => {
-      const applied = fieldValue(c.field) === c.replacement;
+      const applied = !!locate(c.field, c.replacement) && !locate(c.field, c.original);
       if (!applied) pending++;
       const diff = h("div", { class: "fixText" }, wordDiff(c.original, c.replacement).map(([t, x]) =>
         t === "=" ? x : h(t === "-" ? "del" : "ins", {}, x)));
@@ -1064,7 +1061,7 @@
   function applyAllProof() {
     let done = 0, skipped = 0;
     for (const c of lastProof.corrections) {
-      const t = resolvePath(c.field);
+      const t = resolvePath(locate(c.field, c.original) || locate(c.field, c.replacement) || c.field);
       if (!t) { skipped++; continue; }
       const cur = String(t[0][t[1]] ?? "");
       if (cur === c.replacement) continue;
@@ -1124,7 +1121,7 @@
     $("theme").textContent = theme === "dark" ? "☀" : "☾";
     $("theme").title = theme === "dark" ? "Switch to light mode" : "Switch to dark mode";
     if (remember) { try { localStorage.setItem("cv-editor-theme", theme); } catch (e) { /* storage unavailable */ } }
-    if (frame.contentWindow) frame.contentWindow.postMessage({ type: "ui-theme", theme }, "*");
+    if (frame.contentWindow) frame.contentWindow.postMessage({ type: "ui-theme", theme }, location.origin);
   }
 
   $("theme").onclick = () => applyTheme(currentTheme() === "dark" ? "light" : "dark", true);
